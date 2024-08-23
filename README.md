@@ -32,15 +32,15 @@ where
 ```
 id_1 = Node::*1 
 {
-    opt_*
+    Node::*1::opt_*
 };
 
 id_2 = Node::*2 
 {
-    opt_*
+    Node::*2::opt_*
 };
 ```
-has been defined earlier.
+have been defined earlier.
 
 Less cryptically
 ```
@@ -63,4 +63,27 @@ If `node2` is not defined, the edge will be ignored.
 There may be multiple input or output images. 
 
 ## Nodes and options
+
 coming soon~
+
+## Scratch pad
+```
+mix = Node::mix
+{
+    fac: 0.618,
+};
+
+noisy = Node::image
+{
+    src: noisy.png,
+};
+
+denoised = Node::image
+{
+    src: denoised.png,
+};
+
+noisy image -> mix input_1
+denoised image -> mix input_2
+mix output -> output result/mixed.png
+```
