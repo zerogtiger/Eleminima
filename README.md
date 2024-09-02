@@ -1,5 +1,9 @@
 # Eleminima: declarative graphics compositing language
 
+Update Sep. 2nd, 2024: This project will be built with LLVM. 
+
+Building in progress... please stand by. 
+
 ## Grammar definition
 
 ### Node
@@ -64,10 +68,47 @@ There may be multiple input or output images.
 
 ## Nodes and options
 
-coming soon~
+A few representative nodes are shown below. These will be prioritized in implementation. 
+
+```
+Node::image
+{
+    src: *src_of_image*,
+};
+-> output image
+
+Node::mix
+{
+    fac: *factor*,
+};
+-> output image
+
+Node::color_ramp
+{
+    method: *interp_method*,
+    control_points: *list_of_control_points,
+};
+-> output image
+-> preview image
+
+Node::output
+{
+    path: *path*,
+};
+```
 
 ## Scratch pad
 ```
+cr = Node::color_ramp
+{
+    method: b-spline,
+    control_points: 
+    [
+        [0, rgb(0, 100, 244.3)],
+        [0.5, hsv(100, 50, 10)],
+        [0.4, hex(FF3f00)]
+    ]
+}
 mix = Node::mix
 {
     fac: 0.618,
