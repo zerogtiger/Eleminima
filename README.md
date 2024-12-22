@@ -6,6 +6,181 @@ Building in progress... please stand by.
 
 ## Grammar definition
 
+### EBNF
+```EBNF
+program = { statement } ;
+
+statement 
+    : definition 
+    | edge 
+    ;
+
+definition 
+    : id '=' type '{' { field_assignment } '}' ';'
+    ;
+
+edge
+    : id (' ')+ out_field '->' id (' ')+ in_field ';'
+    ;
+
+id
+    : ('a' ... 'z'|'A' ... 'Z'|'_'){'0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_'}
+    ;
+
+type
+    : category '::' node_name
+    ;
+
+category
+    : 'Node'
+    ;
+
+node_name
+    : 'mix'
+    | 'color_ramp'
+    | 'image'
+    ;
+
+field_assignment
+    : in_field ':' argument [',']
+    ;
+
+argument
+    : number 
+    | string 
+    | list 
+    | fun_call
+    ;
+
+number
+    : ['+'|'-'] ('0' ... '9')+ ['.' ('0' ... '9')+] /* to be improved */
+    ;
+
+string
+    : '"' {/* any UTF-8 character */} '"' /* explicitly mention escaped string */
+    ;
+
+fun_call
+    : id '(' {argument} ')'
+    ;
+
+list
+    : '[' {argument | id} ']'
+    ;
+
+out_field
+    : [type '::'] ('0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_')+
+    ;
+
+in_field
+    : [type '::'] ('0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_')+
+    ;
+```
+<!-- --- -->
+<!---->
+<!-- statement = expr -->
+<!--    : 'if' paren_expr statement -->
+<!--    | 'if' paren_expr statement 'else' statement -->
+<!--    | 'while' paren_expr statement -->
+<!--    | 'do' statement 'while' paren_expr ';' -->
+<!--    | '{' statement* '}' -->
+<!--    | expr ';' -->
+<!--    | ';' -->
+<!--    ; -->
+<!---->
+<!-- paren_expr -->
+<!--    : '(' expr ')' -->
+<!--    ; -->
+<!---->
+<!-- expr -->
+<!--    : test -->
+<!--    | id '=' expr -->
+<!--    ; -->
+<!---->
+<!-- test -->
+<!--    : sum -->
+<!--    | sum '<' sum -->
+<!--    ; -->
+<!---->
+<!-- sum -->
+<!--    : term -->
+<!--    | sum '+' term -->
+<!--    | sum '-' term -->
+<!--    ; -->
+<!---->
+<!-- term -->
+<!--    : id -->
+<!--    | integer -->
+<!--    | paren_expr -->
+<!--    ; -->
+<!---->
+<!-- id -->
+<!--    : STRING -->
+<!--    ; -->
+<!---->
+<!-- integer -->
+<!--    : INT -->
+<!--    ; -->
+<!---->
+<!-- STRING -->
+<!--    : [A-Za-z]+ -->
+<!--    ; -->
+<!---->
+<!-- INT -->
+<!--    : [0-9]+ -->
+<!--    ; -->
+<!---->
+<!-- WS -->
+<!--    : [ rnt] -> skip -->
+<!--    ; -->
+<!---->
+<!-- letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" -->
+<!--        | "H" | "I" | "J" | "K" | "L" | "M" | "N" -->
+<!--        | "O" | "P" | "Q" | "R" | "S" | "T" | "U" -->
+<!--        | "V" | "W" | "X" | "Y" | "Z" | "a" | "b" -->
+<!--        | "c" | "d" | "e" | "f" | "g" | "h" | "i" -->
+<!--        | "j" | "k" | "l" | "m" | "n" | "o" | "p" -->
+<!--        | "q" | "r" | "s" | "t" | "u" | "v" | "w" -->
+<!--        | "x" | "y" | "z" ; -->
+<!---->
+<!-- digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ; -->
+<!---->
+<!-- symbol = "[" | "]" | "{" | "}" | "(" | ")" | "<" | ">" -->
+<!--        | "'" | '"' | "=" | "|" | "." | "," | ";" | "-"  -->
+<!--        | "+" | "*" | "?" | "\n" | "\t" | "\r" | "\f" | "\b" ; -->
+<!---->
+<!-- character = letter | digit | symbol | "_" | " " ; -->
+<!-- identifier = letter , { letter | digit | "_" } ; -->
+<!---->
+<!-- S = { " " | "\n" | "\t" | "\r" | "\f" | "\b" } ; -->
+<!---->
+<!-- terminal = "'" , character - "'" , { character - "'" } , "'" -->
+<!--          | '"' , character - '"' , { character - '"' } , '"' ; -->
+<!---->
+<!-- terminator = ";" | "." ; -->
+<!---->
+<!-- term = "(" , S , rhs , S , ")" -->
+<!--      | "[" , S , rhs , S , "]" -->
+<!--      | "{" , S , rhs , S , "}" -->
+<!--      | terminal -->
+<!--      | identifier ; -->
+<!---->
+<!-- factor = term , S , "?" -->
+<!--        | term , S , "*" -->
+<!--        | term , S , "+" -->
+<!--        | term , S , "-" , S , term -->
+<!--        | term , S ; -->
+<!---->
+<!-- concatenation = ( S , factor , S , "," ? ) + ; -->
+<!-- alternation = ( S , concatenation , S , "|" ? ) + ; -->
+<!---->
+<!-- rhs = alternation ; -->
+<!-- lhs = identifier ; -->
+<!---->
+<!-- rule = lhs , S , "=" , S , rhs , S , terminator ; -->
+<!---->
+<!-- grammar = ( S , rule , S ) * ; -->
+
 ### Node
 A `node` is the data type used in this language and can be one of many possible subtypes. 
 
