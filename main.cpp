@@ -137,6 +137,7 @@ static int get_tok()
         str_val = "";
         last_char = getchar();
         while (last_char != '"') {
+            // std::cerr << "str\n";
             if (last_char == '\\') {
                 str_val += last_char;
                 last_char = getchar();
@@ -144,6 +145,7 @@ static int get_tok()
             str_val += last_char;
             last_char = getchar();
         }
+        last_char = getchar(); // eat "
         return tok_string;
     }
 
@@ -176,6 +178,10 @@ class number_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
+Value* number_expr_ast::code_gen() {
+    return nullptr;
+}
+
 class string_expr_ast : public expr_ast {
 
     std::string str;
@@ -185,6 +191,10 @@ class string_expr_ast : public expr_ast {
 
     Value* code_gen() override;
 };
+
+Value* string_expr_ast::code_gen() {
+    return nullptr;
+}
 
 class call_expr_ast : public expr_ast {
     std::string callee;
@@ -199,6 +209,10 @@ class call_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
+Value* call_expr_ast::code_gen() {
+    return nullptr;
+}
+
 class list_expr_ast : public expr_ast {
     std::vector<std::unique_ptr<expr_ast>> content;
 
@@ -207,6 +221,10 @@ class list_expr_ast : public expr_ast {
 
     Value* code_gen() override;
 };
+
+Value* list_expr_ast::code_gen() {
+    return nullptr;
+}
 
 class node_expr_ast : public expr_ast {
     Category cat;
@@ -223,6 +241,10 @@ class node_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
+Value* node_expr_ast::code_gen() {
+    return nullptr;
+}
+
 class var_expr_ast : public expr_ast {
     std::string name;
     std::unique_ptr<node_expr_ast> node;
@@ -235,6 +257,10 @@ class var_expr_ast : public expr_ast {
 
     Value* code_gen() override;
 };
+
+Value* var_expr_ast::code_gen() {
+    return nullptr;
+}
 
 class node_io {
     std::string name;
@@ -253,9 +279,9 @@ static std::map<std::string, std::unique_ptr<node_expr_ast>> nodes;
 static std::vector<std::pair<node_io, node_io>> edges; // directed edges
 
 // LogError* - These are little helper functions for error handling.
-std::unique_ptr<expr_ast> LogError(const char* Str)
+std::unique_ptr<expr_ast> LogError(std::string str)
 {
-    fprintf(stderr, "Error: %s\n", Str);
+    fprintf(stderr, "Error: %s\n", str.c_str());
     return nullptr;
 }
 
@@ -265,13 +291,16 @@ std::unique_ptr<expr_ast> LogError(const char* Str)
 static std::unique_ptr<expr_ast> parse_number_expr()
 {
     auto res = std::make_unique<number_expr_ast>(num_val);
+    std::cerr << "Parsed number: " << num_val << "\n";
     get_next_tok();
     return std::move(res);
+
 }
 
 // string : '"' {/* any UTF-8 character */} '"'
 static std::unique_ptr<expr_ast> parse_string_expr() {
     auto res = std::make_unique<string_expr_ast>(str_val);
+    std::cerr << "Parsed string: " << str_val << "\n";
     get_next_tok();
     return std::move(res);
 }
@@ -302,12 +331,15 @@ static std::unique_ptr<expr_ast> parse_fun_call() {
 
             if (cur_tok != ',')
                 return LogError("Expected ')' or ',' in argument list");
+
             get_next_tok();
         }
     }
 
+    std::cerr << "Parsed function call with: " << name << " and " << args.size() << " arguments\n";
     // Eat the ')'.
     get_next_tok();
+
 
     return std::make_unique<call_expr_ast>(name, std::move(args));
 }
@@ -330,10 +362,12 @@ static std::unique_ptr<expr_ast> parse_list_expr() {
 
             if (cur_tok != ',')
                 return LogError("Expected ']' or ',' in list");
+
             get_next_tok();
         }
     }
 
+    std::cerr << "Parsed list with " << contents.size() << " arguments\n";
     // Eat the ']'.
     get_next_tok();
 
@@ -354,7 +388,7 @@ static std::unique_ptr<expr_ast> parse_argument_expr() {
     if (cur_tok == tok_number) {
         return parse_number_expr();
     }
-    return LogError("Unrecognized token for argument");
+    return LogError("Unrecognized token for argument: " + std::string(1, (char) cur_tok));
 }
 
 // static std::unique_ptr<expr_ast> parse_paren_expr()
@@ -453,29 +487,35 @@ static std::unique_ptr<expr_ast> parse_argument_expr() {
 int main()
 {
     int tmp;
-    while ((tmp = get_tok()) != tok_eof) {
-        switch (tmp) {
-        case -1:
-            std::cerr << "EOF";
+    // while ((tmp = get_tok()) != tok_eof) {
+    //     switch (tmp) {
+    //     case -1:
+    //         std::cerr << "EOF";
+    //         break;
+    //     case -2:
+    //         std::cerr << "Identifier: " << id_name;
+    //         break;
+    //     case -3:
+    //         std::cerr << "Number: " << num_val;
+    //         break;
+    //     case -4:
+    //         std::cerr << "String: " << str_val;
+    //         break;
+    //     case -5:
+    //         std::cerr << "Arrow";
+    //         break;
+    //     case -6:
+    //         std::cerr << "Scope res op";
+    //         break;
+    //     default:
+    //         std::cerr << (char) tmp;
+    //     }
+    //     std::cerr << "\n";
+    // }
+    get_next_tok();
+    while (cur_tok != tok_eof) {
+        if (!parse_argument_expr() ){
             break;
-        case -2:
-            std::cerr << "Identifier: " << id_name;
-            break;
-        case -3:
-            std::cerr << "Number: " << num_val;
-            break;
-        case -4:
-            std::cerr << "String: " << str_val;
-            break;
-        case -5:
-            std::cerr << "Arrow";
-            break;
-        case -6:
-            std::cerr << "Scope res op";
-            break;
-        default:
-            std::cerr << (char) tmp;
         }
-        std::cerr << "\n";
     }
 }
