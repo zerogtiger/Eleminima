@@ -4,9 +4,8 @@ Update Sep. 2nd, 2024: This project will be built with LLVM.
 
 Building in progress... please stand by. 
 
-## Grammar definition
+## EBNF Grammar definition
 
-### EBNF
 ```EBNF
 program = { statement } ;
 
@@ -20,20 +19,20 @@ id
     ;
 
 definition 
-    : '=' type '{' { field_assignment } '}' ';'
+    : '=' type '{' { field_assignment } '}'
     ;
 
 edge
-    : out_field '->' id (' ')+ in_field ';'
+    : out_field '->' id (' ')+ in_field
     ;
 
 
 out_field
-    : [type '::'] id
+    : id
     ;
 
 in_field
-    : [type '::'] id
+    : id
     ;
 
 type

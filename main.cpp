@@ -178,9 +178,7 @@ class number_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* number_expr_ast::code_gen() {
-    return nullptr;
-}
+Value* number_expr_ast::code_gen() { return nullptr; }
 
 class string_expr_ast : public expr_ast {
 
@@ -192,9 +190,7 @@ class string_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* string_expr_ast::code_gen() {
-    return nullptr;
-}
+Value* string_expr_ast::code_gen() { return nullptr; }
 
 class call_expr_ast : public expr_ast {
     std::string callee;
@@ -209,9 +205,7 @@ class call_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* call_expr_ast::code_gen() {
-    return nullptr;
-}
+Value* call_expr_ast::code_gen() { return nullptr; }
 
 class list_expr_ast : public expr_ast {
     std::vector<std::unique_ptr<expr_ast>> content;
@@ -222,9 +216,45 @@ class list_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* list_expr_ast::code_gen() {
-    return nullptr;
-}
+Value* list_expr_ast::code_gen() { return nullptr; }
+
+class field_assgn_ast : public expr_ast {
+
+    std::string field_name;
+    std::unique_ptr<expr_ast> argument;
+
+  public:
+    field_assgn_ast(std::string field_name, std::unique_ptr<expr_ast> argument)
+        : field_name{field_name}, argument{std::move(argument)}
+    {
+    }
+
+    Value* code_gen() override;
+};
+
+Value* field_assgn_ast::code_gen() { return nullptr; }
+
+class node_io {
+    std::string name;
+    std::string field;
+
+  public:
+    node_io(std::string name, std::string field) : name{std::move(name)}, field{std::move(field)} {}
+    const std::string& get_name() { return name; }
+    const std::string& get_field() { return field; }
+};
+
+class edge_expr_ast : public expr_ast {
+
+    node_io first, second;
+
+  public:
+    edge_expr_ast(node_io first, node_io second) : first{first}, second{second} {}
+
+    Value* code_gen() override;
+};
+
+Value* edge_expr_ast::code_gen() { return nullptr; }
 
 class node_expr_ast : public expr_ast {
     Category cat;
@@ -241,36 +271,8 @@ class node_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* node_expr_ast::code_gen() {
-    return nullptr;
-}
-
-class var_expr_ast : public expr_ast {
-    std::string name;
-    std::unique_ptr<node_expr_ast> node;
-
-  public:
-    var_expr_ast(std::string name, std::unique_ptr<node_expr_ast> node)
-        : name{name}, node{std::move(node)}
-    {
-    }
-
-    Value* code_gen() override;
-};
-
-Value* var_expr_ast::code_gen() {
-    return nullptr;
-}
-
-class node_io {
-    std::string name;
-    std::string field;
-
-  public:
-    node_io(std::string name, std::string field) : name{std::move(name)}, field{std::move(field)} {}
-    const std::string& get_name() { return name; }
-    const std::string& get_field() { return field; }
-};
+Value* node_expr_ast::code_gen() { return nullptr; }
+} // namespace
 
 static int cur_tok;
 static int get_next_tok() { return cur_tok = get_tok(); }
@@ -294,22 +296,23 @@ static std::unique_ptr<expr_ast> parse_number_expr()
     std::cerr << "Parsed number: " << num_val << "\n";
     get_next_tok();
     return std::move(res);
-
 }
 
 // string : '"' {/* any UTF-8 character */} '"'
-static std::unique_ptr<expr_ast> parse_string_expr() {
+static std::unique_ptr<expr_ast> parse_string_expr()
+{
     auto res = std::make_unique<string_expr_ast>(str_val);
     std::cerr << "Parsed string: " << str_val << "\n";
     get_next_tok();
     return std::move(res);
 }
 
-// argument : number | string | list | fun_call ; 
+// argument : number | string | list | fun_call ;
 static std::unique_ptr<expr_ast> parse_argument_expr();
 
 // fun_call : id '(' {argument} ')'
-static std::unique_ptr<expr_ast> parse_fun_call() {
+static std::unique_ptr<expr_ast> parse_fun_call()
+{
     std::string name = id_name;
 
     get_next_tok(); // eat identifier
@@ -340,13 +343,12 @@ static std::unique_ptr<expr_ast> parse_fun_call() {
     // Eat the ')'.
     get_next_tok();
 
-
     return std::make_unique<call_expr_ast>(name, std::move(args));
 }
 
 // list : '[' {argument} ']'
-static std::unique_ptr<expr_ast> parse_list_expr() {
-
+static std::unique_ptr<expr_ast> parse_list_expr()
+{
     get_next_tok(); // eat [
 
     std::vector<std::unique_ptr<expr_ast>> contents;
@@ -375,7 +377,8 @@ static std::unique_ptr<expr_ast> parse_list_expr() {
 }
 
 // argument : number | string | list | fun_call
-static std::unique_ptr<expr_ast> parse_argument_expr() {
+static std::unique_ptr<expr_ast> parse_argument_expr()
+{
     if (cur_tok == tok_id) {
         return parse_fun_call();
     }
@@ -391,20 +394,227 @@ static std::unique_ptr<expr_ast> parse_argument_expr() {
     return LogError("Unrecognized token for argument: " + std::string(1, (char) cur_tok));
 }
 
-// static std::unique_ptr<expr_ast> parse_paren_expr()
+// type : category '::' node_name
+// static std::unique_ptr<expr_ast> parse_type_expr()
 // {
-//     get_next_tok(); // eat (.
-//     auto V = parse_expr();
-//     if (!V)
-//         return nullptr;
-//
-//     if (cur_tok != ')')
-//         return LogError("expected ')'");
-//     get_next_tok();
-//     return V;
+//     std::string category = id_name;
+//     get_next_tok(); // eat id name
+//     if (cur_tok != tok_scope_res_op) {
+//         return LogError("Expected '::' for type declareation");
+//     }
+//     get_next_tok(); // eat ::
+//     std::string node_name = id_name;
 // }
-// static std::unique_ptr<expr_ast> parse_argument() {}
+
+// definition : '=' type '{' { field_assignment } '}' ';' ;
+static std::unique_ptr<expr_ast> parse_defn_expr()
+{
+    get_next_tok(); // eat '='
+
+    if (cur_tok != tok_id) {
+        return LogError("Expected category in node definition");
+    }
+    std::string id_str = id_name;
+    get_next_tok(); // eat id
+
+    if (cur_tok != tok_scope_res_op) {
+        return LogError("Expected \"::\"");
+    }
+    get_next_tok();                 // eat "::"
+    if (cur_tok != Token::tok_id) { // check validity
+        return LogError("Expected node name");
+    }
+    std::string node_name = id_str;
+    get_next_tok(); // eat node name
+
+    if (cur_tok != '{') {
+        return LogError("Expected { in node declaration");
+    }
+    get_next_tok(); // eat {
+
+    std::map<std::string, std::unique_ptr<expr_ast>> fields;
+    while (cur_tok != '}') {
+        if (cur_tok != tok_id) {
+            return LogError("Expected field name in node declaration");
+        }
+        std::string field_name = id_name;
+        get_next_tok(); // eat id name
+
+        if (cur_tok != ':') {
+            return LogError("Expected ':' for field assignment");
+        }
+        get_next_tok(); // eat :
+
+        auto arg = parse_argument_expr();
+        if (!arg) {
+            return nullptr;
+        }
+        std::cerr << "Parsed field assignment with name " << field_name << "\n";
+
+        if (cur_tok == ',') {
+            get_next_tok();
+        }
+        else {
+            break;
+        }
+        fields[field_name] = std::move(std::move(arg));
+
+        // auto res = std::make_unique<field_assgn_ast>(field_name, std::move(arg));
+        // std::string arg_name = id_name;
+        //
+        // if (cur_tok == ',') {
+        //     get_next_tok();
+        // }
+    }
+    std::cerr <<  "Parsed node definition with " << fields.size() << " arguments\n";
+    auto res = std::make_unique<node_expr_ast>(Category::Node, NodeName::Mix, std::move(fields));
+    get_next_tok(); // eat the '}'
+    return std::move(res);
+}
+
+// edge : out_field '->' id (' ')+ in_field ';' ;
+static std::unique_ptr<expr_ast> parse_edge_expr(std::string first_cat)
+{
+    std::string first_field = id_name;
+    get_next_tok(); // eat field name
+
+    if (cur_tok != tok_arrow) {
+        return LogError("Expected arrow \"->\" in edge declaration");
+    }
+    get_next_tok(); // eat arrow
+
+    if (cur_tok != tok_id) {
+        return LogError("Expected node category in edge declaration");
+    }
+    std::string second_cat = id_name;
+    get_next_tok(); // eat second id
+
+    if (cur_tok != tok_id) {
+        return LogError("Expected field name in edge declaration");
+    }
+    std::string second_field = id_name;
+
+    // perform necessary checks
+    edges.push_back({node_io(first_cat, first_field), node_io(second_cat, second_field)});
+    auto res = std::make_unique<edge_expr_ast>(node_io(first_cat, first_field),
+                                               node_io(second_cat, second_field));
+    std::cerr << "Parsed edge from " << first_cat << " " << first_field << " -> " << second_cat
+              << " " << second_field << "\n";
+    get_next_tok(); // eat field name
+    return std::move(res);
+}
+
+// statement : id (' ')+ definition | id (' ')+ edge ;
+static bool parse_statement_expr()
+{
+    if (cur_tok != tok_id) {
+        LogError("Expected identifier in statement declaration");
+        return false;
+    }
+    auto first_id = id_name;
+    get_next_tok();
+    if (cur_tok == '=') {
+        auto node_defn = parse_defn_expr();
+        if (!node_defn) {
+            return false;
+        }
+        std::unique_ptr<node_expr_ast> node_ptr =
+            std::unique_ptr<node_expr_ast>(static_cast<node_expr_ast*>(node_defn.release()));
+        ::nodes[first_id] = std::move(node_ptr);
+        return true;
+    }
+    else if (cur_tok == tok_id) {
+        auto res = parse_edge_expr(first_id);
+        if (!res) {
+            return false;
+        }
+        return true;
+    }
+    LogError("Unrecognized token for statement");
+    return false;
+}
+
+int main()
+{
+    get_next_tok();
+    while (cur_tok != tok_eof) {
+        if (!parse_statement_expr()) {
+            break;
+        }
+    }
+    return 0;
+}
+
+// int tmp;
+// while ((tmp = get_tok()) != tok_eof) {
+//     switch (tmp) {
+//     case -1:
+//         std::cerr << "EOF";
+//         break;
+//     case -2:
+//         std::cerr << "Identifier: " << id_name;
+//         break;
+//     case -3:
+//         std::cerr << "Number: " << num_val;
+//         break;
+//     case -4:
+//         std::cerr << "String: " << str_val;
+//         break;
+//     case -5:
+//         std::cerr << "Arrow";
+//         break;
+//     case -6:
+//         std::cerr << "Scope res op";
+//         break;
+//     default:
+//         std::cerr << (char) tmp;
+//     }
+//     std::cerr << "\n";
+// }
+// ---
+
+// class var_expr_ast : public expr_ast {
+//     std::string name;
+//     std::unique_ptr<node_expr_ast> node;
 //
+//   public:
+//     var_expr_ast(std::string name, std::unique_ptr<node_expr_ast> node)
+//         : name{name}, node{std::move(node)}
+//     {
+//     }
+//
+//     Value* code_gen() override;
+// };
+//
+// Value* var_expr_ast::code_gen() {
+//     return nullptr;
+// }
+
+// field_assignment : id ':' argument [',']
+// static std::unique_ptr<expr_ast> parse_field_assgn_expr()
+// {
+//     std::string field_name = id_name;
+//     get_next_tok(); // eat id name
+//     if (cur_tok != ':') {
+//         return LogError("Expected ':' for field assignment");
+//     }
+//     get_next_tok(); // eat :
+//     auto arg = parse_argument_expr();
+//     if (!arg) {
+//         return nullptr;
+//     }
+//     auto res = std::make_unique<field_assgn_ast>(field_name, std::move(arg));
+//     std::cerr << "Parsed argument with name " << field_name << "\n";
+//     get_next_tok();
+//     return res;
+// }
+
+// // out_field : [type '::'] id
+// static std::unique_ptr<expr_ast> parse_field_expr()
+// {
+//     std::string type = id_name;
+//     get_next_tok(); // eat id name
+// }
 // static std::unique_ptr<expr_ast> parse_node_expr()
 // {
 //     std::string id_str = id_name;
@@ -436,6 +646,23 @@ static std::unique_ptr<expr_ast> parse_argument_expr() {
 //     get_next_tok(); // eat the '}'
 //     return std::move(res);
 // }
+
+// category : 'Node'
+
+// static std::unique_ptr<expr_ast> parse_paren_expr()
+// {
+//     get_next_tok(); // eat (.
+//     auto V = parse_expr();
+//     if (!V)
+//         return nullptr;
+//
+//     if (cur_tok != ')')
+//         return LogError("expected ')'");
+//     get_next_tok();
+//     return V;
+// }
+// static std::unique_ptr<expr_ast> parse_argument() {}
+//
 //
 // static std::unique_ptr<expr_ast> parse_id_expr()
 // {
@@ -482,40 +709,3 @@ static std::unique_ptr<expr_ast> parse_argument_expr() {
 //
 // }
 //
-} // namespace
-
-int main()
-{
-    int tmp;
-    // while ((tmp = get_tok()) != tok_eof) {
-    //     switch (tmp) {
-    //     case -1:
-    //         std::cerr << "EOF";
-    //         break;
-    //     case -2:
-    //         std::cerr << "Identifier: " << id_name;
-    //         break;
-    //     case -3:
-    //         std::cerr << "Number: " << num_val;
-    //         break;
-    //     case -4:
-    //         std::cerr << "String: " << str_val;
-    //         break;
-    //     case -5:
-    //         std::cerr << "Arrow";
-    //         break;
-    //     case -6:
-    //         std::cerr << "Scope res op";
-    //         break;
-    //     default:
-    //         std::cerr << (char) tmp;
-    //     }
-    //     std::cerr << "\n";
-    // }
-    get_next_tok();
-    while (cur_tok != tok_eof) {
-        if (!parse_argument_expr() ){
-            break;
-        }
-    }
-}
