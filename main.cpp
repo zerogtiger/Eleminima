@@ -340,6 +340,23 @@ static std::unique_ptr<expr_ast> parse_list_expr() {
     return std::make_unique<list_expr_ast>(std::move(contents));
 }
 
+// argument : number | string | list | fun_call
+static std::unique_ptr<expr_ast> parse_argument_expr() {
+    if (cur_tok == tok_id) {
+        return parse_fun_call();
+    }
+    if (cur_tok == tok_string) {
+        return parse_string_expr();
+    }
+    if (cur_tok == '[') {
+        return parse_list_expr();
+    }
+    if (cur_tok == tok_number) {
+        return parse_number_expr();
+    }
+    return LogError("Unrecognized token for argument");
+}
+
 // static std::unique_ptr<expr_ast> parse_paren_expr()
 // {
 //     get_next_tok(); // eat (.
