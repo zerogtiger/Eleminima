@@ -11,20 +11,29 @@ Building in progress... please stand by.
 program = { statement } ;
 
 statement 
-    : definition 
-    | edge 
-    ;
-
-definition 
-    : id '=' type '{' { field_assignment } '}' ';'
-    ;
-
-edge
-    : id (' ')+ out_field '->' id (' ')+ in_field ';'
+    : id (' ')+ definition 
+    | id (' ')+ edge 
     ;
 
 id
     : ('a' ... 'z'|'A' ... 'Z'|'_'){'0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_'}
+    ;
+
+definition 
+    : '=' type '{' { field_assignment } '}' ';'
+    ;
+
+edge
+    : out_field '->' id (' ')+ in_field ';'
+    ;
+
+
+out_field
+    : [type '::'] id
+    ;
+
+in_field
+    : [type '::'] id
     ;
 
 type
@@ -65,16 +74,9 @@ fun_call
     ;
 
 list
-    : '[' {argument | id} ']'
+    : '[' {argument} ']'
     ;
 
-out_field
-    : [type '::'] ('0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_')+
-    ;
-
-in_field
-    : [type '::'] ('0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_')+
-    ;
 ```
 <!-- --- -->
 <!---->
