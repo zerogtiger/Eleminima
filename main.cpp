@@ -425,6 +425,7 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
     if (cur_tok != tok_id) {
         return LogError("Expected category in node definition");
     }
+
     std::string cat = id_name;
     get_next_tok(); // eat id
     if (!is_valid_category(cat)) {
@@ -441,7 +442,8 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
     std::string node_name = id_name;
     get_next_tok(); // eat node name
     if (!is_valid_node_name_given_cat(cat, node_name)) {
-        return LogError("Expected valid node name under \"" + cat + "\", got \"" + node_name + "\"");
+        return LogError("Expected valid node name under \"" + cat + "\", got \"" + node_name +
+                        "\"");
     }
 
     if (cur_tok != '{') {
@@ -489,6 +491,11 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
     return std::move(res);
 }
 
+static bool contains_cycle(node_io in, node_io out) {
+
+    return false; 
+}
+
 // edge : out_field '->' id (' ')+ in_field ';' ;
 static std::unique_ptr<expr_ast> parse_edge_expr(std::string first_cat)
 {
@@ -501,23 +508,31 @@ static std::unique_ptr<expr_ast> parse_edge_expr(std::string first_cat)
     get_next_tok(); // eat arrow
 
     if (cur_tok != tok_id) {
-        return LogError("Expected node category in edge declaration");
+        return LogError("Expected variable name in edge declaration");
     }
+
     std::string second_cat = id_name;
     get_next_tok(); // eat second id
+    if (!::nodes.count(second_cat)) {
+        LogError("Expected predefined variable name for edge declaration. Got \"" + second_cat + "\" instead.");
+    }
 
     if (cur_tok != tok_id) {
         return LogError("Expected field name in edge declaration");
     }
     std::string second_field = id_name;
 
-    // perform necessary checks
-    edges.push_back({node_io(first_cat, first_field), node_io(second_cat, second_field)});
-    auto res = std::make_unique<edge_expr_ast>(node_io(first_cat, first_field),
-                                               node_io(second_cat, second_field));
     std::cerr << "Parsed edge from " << first_cat << " " << first_field << " -> " << second_cat
               << " " << second_field << "\n";
+    auto res = std::make_unique<edge_expr_ast>(node_io(first_cat, first_field),
+                                               node_io(second_cat, second_field));
     get_next_tok(); // eat field name
+    if (contains_cycle(node_io(first_cat, first_field), node_io(second_cat, second_field))) {
+        LogError("Edge from " + first_cat + " " + first_field + " -> " + second_cat + " " +
+                 second_field + " creates a cycle. Ignored.");
+        return res;
+    }
+    edges.push_back({node_io(first_cat, first_field), node_io(second_cat, second_field)});
     return std::move(res);
 }
 
@@ -531,6 +546,10 @@ static bool parse_statement_expr()
     auto first_id = id_name;
     get_next_tok();
     if (cur_tok == '=') {
+        if (::nodes.count(first_id)) {
+            LogError("Expected distinct variable name for node declaration. Got \"" + first_id + "\" instead.");
+            return false;
+        }
         auto node_defn = parse_defn_expr();
         if (!node_defn) {
             return false;
@@ -541,6 +560,10 @@ static bool parse_statement_expr()
         return true;
     }
     else if (cur_tok == tok_id) {
+        if (!::nodes.count(first_id)) {
+            LogError("Expected predefined variable name for edge declaration. Got \"" + first_id + "\" instead.");
+            return false;
+        }
         auto res = parse_edge_expr(first_id);
         if (!res) {
             return false;
@@ -559,7 +582,6 @@ int main()
             break;
         }
     }
-    return 0;
 }
 
 // int tmp;
