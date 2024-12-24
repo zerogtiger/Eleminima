@@ -409,13 +409,15 @@ static std::unique_ptr<expr_ast> parse_argument_expr()
 //     std::string node_name = id_name;
 // }
 
-static bool is_valid_category(std::string cat) { return cat == "Node"; }
+static bool is_valid_category(std::string cat) { return cat == "node" || cat == "io"; }
 
 static bool is_valid_node_name_given_cat(std::string cat, std::string node_name)
 {
-    if (cat == "Node") {
-        return node_name == "mix" || node_name == "color_ramp" || node_name == "image" ||
-               node_name == "output";
+    if (cat == "node") {
+        return node_name == "mix" || node_name == "color_ramp";
+    }
+    if (cat == "io") {
+        return node_name == "image" || node_name == "output";
     }
     return false;
 }
@@ -594,6 +596,11 @@ static bool parse_statement_expr()
     LogError("Unrecognized token for statement");
     return false;
 }
+
+// =====================
+// Code Generation (IR)
+// =====================
+
 
 int main()
 {
