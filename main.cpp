@@ -11,6 +11,9 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <queue>
+#include <set>
+#include <stack>
 #include <string>
 
 using namespace llvm;
@@ -491,9 +494,27 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
     return std::move(res);
 }
 
+// Lots of room for efficiency improvementns
 static bool contains_cycle(node_io in, node_io out) {
+    // bfs
+    std::queue<std::string> q;
+    std::set<std::string> visited;
+    q.push(in.get_name());
+    while (!q.empty()) {
+        auto curr = q.front();
+        q.pop();
+        if (visited.count(curr)) {
+            continue;
+        }
+        visited.insert(curr);
+        for (auto &e : edges) {
+            if (e.first.get_name() == curr) {
+                q.push(e.second.get_name());
+            }
+        }
+    }
 
-    return false; 
+    return visited.count(in.get_name()); 
 }
 
 // edge : out_field '->' id (' ')+ in_field ';' ;
