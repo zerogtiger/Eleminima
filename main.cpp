@@ -406,6 +406,17 @@ static std::unique_ptr<expr_ast> parse_argument_expr()
 //     std::string node_name = id_name;
 // }
 
+static bool is_valid_category(std::string cat) { return cat == "Node"; }
+
+static bool is_valid_node_name_given_cat(std::string cat, std::string node_name)
+{
+    if (cat == "Node") {
+        return node_name == "mix" || node_name == "color_ramp" || node_name == "image" ||
+               node_name == "output";
+    }
+    return false;
+}
+
 // definition : '=' type '{' { field_assignment } '}' ';' ;
 static std::unique_ptr<expr_ast> parse_defn_expr()
 {
@@ -414,18 +425,24 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
     if (cur_tok != tok_id) {
         return LogError("Expected category in node definition");
     }
-    std::string id_str = id_name;
+    std::string cat = id_name;
     get_next_tok(); // eat id
+    if (!is_valid_category(cat)) {
+        return LogError("Expected valid category name, got \"" + cat + "\"");
+    }
 
     if (cur_tok != tok_scope_res_op) {
         return LogError("Expected \"::\"");
     }
-    get_next_tok();                 // eat "::"
-    if (cur_tok != Token::tok_id) { // check validity
+    get_next_tok(); // eat "::"
+    if (cur_tok != Token::tok_id) {
         return LogError("Expected node name");
     }
-    std::string node_name = id_str;
+    std::string node_name = id_name;
     get_next_tok(); // eat node name
+    if (!is_valid_node_name_given_cat(cat, node_name)) {
+        return LogError("Expected valid node name under \"" + cat + "\", got \"" + node_name + "\"");
+    }
 
     if (cur_tok != '{') {
         return LogError("Expected { in node declaration");
@@ -466,7 +483,7 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
         //     get_next_tok();
         // }
     }
-    std::cerr <<  "Parsed node definition with " << fields.size() << " arguments\n";
+    std::cerr << "Parsed node definition with " << fields.size() << " arguments\n";
     auto res = std::make_unique<node_expr_ast>(Category::Node, NodeName::Mix, std::move(fields));
     get_next_tok(); // eat the '}'
     return std::move(res);
