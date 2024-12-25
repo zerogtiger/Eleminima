@@ -2,3 +2,6 @@ exec
 .DS_Store
 runtime/demo
 runtime/docs
+final_exe
+*.o
+*.jpeg

@@ -1,16 +1,23 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ilist_node.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FileSystem.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <ios>
 #include <iostream>
 #include <map>
@@ -607,9 +614,125 @@ Value* log_error_v(std::string str)
     return nullptr;
 }
 
-// Value* extern_funtion_gen() {
-//     std::vector<Type*> doubles
-// }
+Value* extern_funtion_gen()
+{
+    context = std::make_unique<LLVMContext>();
+    module = std::make_unique<Module>("Eleminima module", *context);
+
+    // Create a new builder for the module.
+    ir_builder = std::make_unique<IRBuilder<>>(*context);
+
+    llvm::StructType* image_type = llvm::StructType::create(*context, "Image");
+    image_type->setBody({
+        llvm::Type::getInt32Ty(*context),                          // width
+        llvm::Type::getInt32Ty(*context),                          // height
+        llvm::Type::getInt32Ty(*context),                          // channels
+        llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0) // data (uint8_t*)
+    });
+
+    llvm::StructType* image_wrapper_type = llvm::StructType::create(*context, "ImageWrapper");
+    image_wrapper_type->setBody(
+        llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0)); // void* instance
+
+    // llvm::FunctionType* func_type = llvm::FunctionType::get(image_type, false);
+    // llvm::Function* dummy_func = llvm::Function::Create(
+    //     func_type, llvm::GlobalValue::ExternalLinkage, "dummy_func", module.get());
+
+    // Make the function type:  double(double,double) etc.
+
+    // void image_grayscale_avg(ImageWrapper* img) {
+    //     static_cast<Image*>(img->instance)->grayscale_avg();
+    // }
+    // std::vector<Type*> Doubles(Args.size(), Type::getDoubleTy(*TheContext));
+
+    // image_grayscale_avg
+    FunctionType* func_type = FunctionType::get(
+        llvm::Type::getVoidTy(*context), llvm::PointerType::get(image_wrapper_type, 0), false);
+    Function* func =
+        Function::Create(func_type, Function::ExternalLinkage, "image_grayscale_avg", module.get());
+    for (auto& arg : func->args())
+        arg.setName("img");
+
+    // image_create_from_file
+    func_type =
+        FunctionType::get(llvm::PointerType::get(image_wrapper_type, 0),
+                          {llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0)}, false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_create_from_file",
+                            module.get());
+    for (auto& arg : func->args())
+        arg.setName("filename");
+
+    // image_write
+    func_type = FunctionType::get(llvm::Type::getInt1Ty(*context),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_write", module.get());
+    auto arg_iter = func->arg_begin();
+    arg_iter->setName("img");
+    (++arg_iter)->setName("filename");
+
+    // Look up the name in the global module table.
+    Function* callee_f = module->getFunction("image_create_from_file");
+
+    if (!callee_f)
+        return log_error_v("Unknown function referenced");
+
+    std::vector<Value*> args_v;
+
+    func_type = llvm::FunctionType::get(llvm::Type::getVoidTy(*context), {}, false);
+    func = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage, "main", module.get());
+    llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
+    ir_builder->SetInsertPoint(bb);
+
+    llvm::Value* str_ptr = ir_builder->CreateGlobalStringPtr(
+        "/Users/tigerding/Projects/eleminima/runtime/demo/original/demo.jpeg", "str");
+    args_v.push_back(str_ptr);
+
+    if (callee_f->arg_size() != args_v.size())
+        return log_error_v("Incorrect # arguments passed");
+
+    auto calltmp = ir_builder->CreateCall(callee_f, args_v, "calltmp");
+
+    args_v.clear();
+    // Look up the name in the global module table.
+    callee_f = module->getFunction("image_grayscale_avg");
+    args_v.push_back(calltmp);
+
+    if (!callee_f)
+        return log_error_v("Unknown function referenced");
+
+    if (callee_f->arg_size() != args_v.size())
+        return log_error_v("Incorrect # arguments passed");
+
+    ir_builder->CreateCall(callee_f, args_v);
+
+    args_v.clear();
+    // Look up the name in the global module table.
+    callee_f = module->getFunction("image_write");
+    args_v.push_back(calltmp);
+    str_ptr =
+        ir_builder->CreateGlobalStringPtr("/Users/tigerding/Projects/eleminima/demo.jpeg", "str");
+    args_v.push_back(str_ptr);
+
+    if (!callee_f)
+        return log_error_v("Unknown function referenced");
+
+    if (callee_f->arg_size() != args_v.size())
+        return log_error_v("Incorrect # arguments passed");
+
+    calltmp = ir_builder->CreateCall(callee_f, args_v);
+    ir_builder->CreateRetVoid();
+
+    module->print(errs(), nullptr);
+    std::error_code ec;
+    llvm::raw_fd_ostream out_file("module_output.ll", ec, sys::fs::OF_None);
+    module->print(out_file, nullptr);
+    out_file.close();
+    return nullptr;
+}
 
 Value* number_expr_ast::code_gen() { return ConstantFP::get(*context, APFloat(val)); }
 
@@ -645,12 +768,13 @@ Value* node_expr_ast::code_gen() { return nullptr; }
 
 int main()
 {
-    get_next_tok();
-    while (cur_tok != tok_eof) {
-        if (!parse_statement_expr()) {
-            break;
-        }
-    }
+    extern_funtion_gen();
+    // get_next_tok();
+    // while (cur_tok != tok_eof) {
+    //     if (!parse_statement_expr()) {
+    //         break;
+    //     }
+    // }
 }
 
 // int tmp;
