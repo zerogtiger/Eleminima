@@ -10,70 +10,70 @@ Building in progress... please stand by.
 program = { statement } ;
 
 statement 
-    : id (' ')+ definition 
+    = id (' ')+ definition 
     | id (' ')+ edge 
     ;
 
 id
-    : ('a' ... 'z'|'A' ... 'Z'|'_'){'0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_'}
+    = ('a' ... 'z'|'A' ... 'Z'|'_'){'0' ... '9'|'a' ... 'z'|'A' ... 'Z'|'_'}
     ;
 
 definition 
-    : '=' type '{' { field_assignment } '}'
+    = '=' type '{' { field_assignment } '}'
     ;
 
 edge
-    : out_field '->' id (' ')+ in_field
+    = out_field '->' id (' ')+ in_field
     ;
 
 
 out_field
-    : id
+    = id
     ;
 
 in_field
-    : id
+    = id
     ;
 
 type
-    : category '::' node_name
+    = category '::' node_name
     ;
 
 category
-    : 'Node'
+    = 'Node'
     ;
 
 node_name
-    : 'mix'
+    = 'mix'
     | 'color_ramp'
     | 'image'
     ;
 
 field_assignment
-    : in_field ':' argument [',']
+    = in_field ':' argument [',']
     ;
 
 argument
-    : number 
+    = number 
     | string 
     | list 
     | fun_call
     ;
 
 number
-    : ['+'|'-'] ('0' ... '9')+ ['.' ('0' ... '9')+] /* to be improved */
+    = ['+'|'-'] ('0' ... '9')+ ['.' ('0' ... '9')+] /* to be improved */
     ;
 
 string
-    : '"' {/* any UTF-8 character */} '"' /* explicitly mention escaped string */
+    = '"' {/* any UTF-8 character */} '"' /* explicitly mention escaped string */
     ;
 
 fun_call
-    : id '(' {argument} ')'
+    = id '(' {argument} ')'
     ;
 
 list
-    : '[' {argument} ']'
+    = '[' {argument} ']'
     ;
 
 ```
