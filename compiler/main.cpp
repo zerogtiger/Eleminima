@@ -1,6 +1,10 @@
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ilist_node.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Value.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -181,8 +185,6 @@ class number_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* number_expr_ast::code_gen() { return nullptr; }
-
 class string_expr_ast : public expr_ast {
 
     std::string str;
@@ -192,8 +194,6 @@ class string_expr_ast : public expr_ast {
 
     Value* code_gen() override;
 };
-
-Value* string_expr_ast::code_gen() { return nullptr; }
 
 class call_expr_ast : public expr_ast {
     std::string callee;
@@ -208,8 +208,6 @@ class call_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* call_expr_ast::code_gen() { return nullptr; }
-
 class list_expr_ast : public expr_ast {
     std::vector<std::unique_ptr<expr_ast>> content;
 
@@ -218,8 +216,6 @@ class list_expr_ast : public expr_ast {
 
     Value* code_gen() override;
 };
-
-Value* list_expr_ast::code_gen() { return nullptr; }
 
 class field_assgn_ast : public expr_ast {
 
@@ -234,8 +230,6 @@ class field_assgn_ast : public expr_ast {
 
     Value* code_gen() override;
 };
-
-Value* field_assgn_ast::code_gen() { return nullptr; }
 
 class node_io {
     std::string name;
@@ -257,8 +251,6 @@ class edge_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* edge_expr_ast::code_gen() { return nullptr; }
-
 class node_expr_ast : public expr_ast {
     Category cat;
     NodeName name;
@@ -274,7 +266,6 @@ class node_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-Value* node_expr_ast::code_gen() { return nullptr; }
 } // namespace
 
 static int cur_tok;
@@ -497,7 +488,8 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
 }
 
 // Lots of room for efficiency improvementns
-static bool contains_cycle(node_io in, node_io out) {
+static bool contains_cycle(node_io in, node_io out)
+{
     // bfs
     std::queue<std::string> q;
     std::set<std::string> visited;
@@ -509,14 +501,14 @@ static bool contains_cycle(node_io in, node_io out) {
             continue;
         }
         visited.insert(curr);
-        for (auto &e : edges) {
+        for (auto& e : edges) {
             if (e.first.get_name() == curr) {
                 q.push(e.second.get_name());
             }
         }
     }
 
-    return visited.count(in.get_name()); 
+    return visited.count(in.get_name());
 }
 
 // edge : out_field '->' id (' ')+ in_field ';' ;
@@ -537,7 +529,8 @@ static std::unique_ptr<expr_ast> parse_edge_expr(std::string first_cat)
     std::string second_cat = id_name;
     get_next_tok(); // eat second id
     if (!::nodes.count(second_cat)) {
-        LogError("Expected predefined variable name for edge declaration. Got \"" + second_cat + "\" instead.");
+        LogError("Expected predefined variable name for edge declaration. Got \"" + second_cat +
+                 "\" instead.");
     }
 
     if (cur_tok != tok_id) {
@@ -570,7 +563,8 @@ static bool parse_statement_expr()
     get_next_tok();
     if (cur_tok == '=') {
         if (::nodes.count(first_id)) {
-            LogError("Expected distinct variable name for node declaration. Got \"" + first_id + "\" instead.");
+            LogError("Expected distinct variable name for node declaration. Got \"" + first_id +
+                     "\" instead.");
             return false;
         }
         auto node_defn = parse_defn_expr();
@@ -584,7 +578,8 @@ static bool parse_statement_expr()
     }
     else if (cur_tok == tok_id) {
         if (!::nodes.count(first_id)) {
-            LogError("Expected predefined variable name for edge declaration. Got \"" + first_id + "\" instead.");
+            LogError("Expected predefined variable name for edge declaration. Got \"" + first_id +
+                     "\" instead.");
             return false;
         }
         auto res = parse_edge_expr(first_id);
@@ -604,8 +599,49 @@ static bool parse_statement_expr()
 static std::unique_ptr<LLVMContext> context;
 static std::unique_ptr<Module> module;
 static std::unique_ptr<IRBuilder<>> ir_builder;
+static std::map<std::string, Value*> named_values;
 
+Value* log_error_v(std::string str)
+{
+    LogError(str);
+    return nullptr;
+}
 
+// Value* extern_funtion_gen() {
+//     std::vector<Type*> doubles
+// }
+
+Value* number_expr_ast::code_gen() { return ConstantFP::get(*context, APFloat(val)); }
+
+Value* string_expr_ast::code_gen() { return nullptr; }
+
+Value* call_expr_ast::code_gen()
+{
+    // Look up the name in the global module table.
+    Function* callee_f = module->getFunction(callee);
+    if (!callee_f)
+        return log_error_v("Unknown function referenced");
+
+    // If argument mismatch error.
+    if (callee_f->arg_size() != args.size())
+        return log_error_v("Incorrect # arguments passed");
+
+    std::vector<Value*> args_v;
+    for (unsigned i = 0, e = args.size(); i != e; ++i) {
+        args_v.push_back(args[i]->code_gen());
+        if (!args_v.back())
+            return nullptr;
+    }
+    return ir_builder->CreateCall(callee_f, args_v, "calltmp");
+}
+
+Value* list_expr_ast::code_gen() { return nullptr; }
+
+Value* field_assgn_ast::code_gen() { return nullptr; }
+
+Value* edge_expr_ast::code_gen() { return nullptr; }
+
+Value* node_expr_ast::code_gen() { return nullptr; }
 
 int main()
 {
