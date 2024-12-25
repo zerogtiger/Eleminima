@@ -601,6 +601,11 @@ static bool parse_statement_expr()
 // Code Generation (IR)
 // =====================
 
+static std::unique_ptr<LLVMContext> context;
+static std::unique_ptr<Module> module;
+static std::unique_ptr<IRBuilder<>> ir_builder;
+
+
 
 int main()
 {
