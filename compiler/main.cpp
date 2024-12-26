@@ -246,6 +246,8 @@ class node_io {
     node_io(std::string name, std::string field) : name{std::move(name)}, field{std::move(field)} {}
     const std::string& get_name() { return name; }
     const std::string& get_field() { return field; }
+
+    bool operator==(const node_io& other) { return name == other.name && field == other.field; }
 };
 
 class edge_expr_ast : public expr_ast {
@@ -279,7 +281,9 @@ static int cur_tok;
 static int get_next_tok() { return cur_tok = get_tok(); }
 
 static std::map<std::string, std::unique_ptr<node_expr_ast>> nodes;
-static std::vector<std::pair<node_io, node_io>> edges; // directed edges
+// static std::vector<std::pair<node_io, node_io>> edges; // directed edges
+static std::map<std::string, std::vector<std::pair<std::string, node_io>>> forward_edges;
+static std::map<std::string, std::vector<std::pair<std::string, node_io>>> reverse_edges;
 
 // LogError* - These are little helper functions for error handling.
 std::unique_ptr<expr_ast> LogError(std::string str)
@@ -508,13 +512,11 @@ static bool contains_cycle(node_io in, node_io out)
             continue;
         }
         visited.insert(curr);
-        for (auto& e : edges) {
-            if (e.first.get_name() == curr) {
-                q.push(e.second.get_name());
-            }
-            if (curr == in.get_name()) {
-                q.push(out.get_name());
-            }
+        if (curr == in.get_name()) {
+            q.push(out.get_name());
+        }
+        for (auto& e : forward_edges[curr]) {
+            q.push(e.second.get_name());
         }
     }
 
@@ -523,16 +525,26 @@ static bool contains_cycle(node_io in, node_io out)
 
 void add_edge(node_io in, node_io out)
 {
-    for (size_t i = 0; i < edges.size(); ++i) {
-        if (edges[i].second.get_name() == out.get_name() &&
-            edges[i].second.get_field() == out.get_field()) {
+    for (size_t i = 0; i < reverse_edges[out.get_name()].size(); ++i) {
+        if (reverse_edges[out.get_name()][i].first == out.get_field()) {
+
             LogError("Pre-existing edge to " + out.get_name() + " " + out.get_field() +
                      " found, replaced with new edge");
-            edges[i].first = in;
+
+            std::string old_in = reverse_edges[out.get_name()][i].second.get_name();
+            reverse_edges[out.get_name()][i] = {out.get_field(), in};
+
+            for (size_t j = 0; j < forward_edges[old_in].size(); ++j) {
+                if (forward_edges[old_in][j].second == out) {
+                    forward_edges[old_in].erase(forward_edges[old_in].begin() + j);
+                }
+            }
+            forward_edges[in.get_name()].push_back({in.get_field(), out});
             return;
         }
     }
-    edges.push_back({in, out});
+    forward_edges[in.get_name()].push_back({in.get_field(), out});
+    reverse_edges[out.get_name()].push_back({out.get_field(), in});
 }
 
 // edge : out_field '->' id (' ')+ in_field ';' ;
@@ -741,17 +753,12 @@ Value* extern_funtion_gen()
     calltmp = ir_builder->CreateCall(callee_f, args_v);
     ir_builder->CreateRetVoid();
 
-    module->print(errs(), nullptr);
-    std::error_code ec;
-    llvm::raw_fd_ostream out_file("module_output.ll", ec, sys::fs::OF_None);
-    module->print(out_file, nullptr);
-    out_file.close();
     return nullptr;
 }
 
 Value* number_expr_ast::code_gen() { return ConstantFP::get(*context, APFloat(val)); }
 
-Value* string_expr_ast::code_gen() { return nullptr; }
+Value* string_expr_ast::code_gen() { return ir_builder->CreateGlobalStringPtr(str, "str"); }
 
 Value* call_expr_ast::code_gen()
 {
@@ -781,16 +788,25 @@ Value* edge_expr_ast::code_gen() { return nullptr; }
 
 Value* node_expr_ast::code_gen() { return nullptr; }
 
+void output_code_gen() {}
+
 int main()
 {
-    // ir_emission_init();
-    // extern_funtion_gen();
     get_next_tok();
     while (cur_tok != tok_eof) {
         if (!parse_statement_expr()) {
             break;
         }
     }
+
+    ir_emission_init();
+    extern_funtion_gen();
+
+    module->print(errs(), nullptr);
+    std::error_code ec;
+    llvm::raw_fd_ostream out_file("module_output.ll", ec, sys::fs::OF_None);
+    module->print(out_file, nullptr);
+    out_file.close();
 }
 
 // int tmp;
