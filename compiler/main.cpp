@@ -9,8 +9,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -500,7 +500,7 @@ static bool contains_cycle(node_io in, node_io out)
     // bfs
     std::queue<std::string> q;
     std::set<std::string> visited;
-    q.push(in.get_name());
+    q.push(out.get_name());
     while (!q.empty()) {
         auto curr = q.front();
         q.pop();
@@ -512,10 +512,27 @@ static bool contains_cycle(node_io in, node_io out)
             if (e.first.get_name() == curr) {
                 q.push(e.second.get_name());
             }
+            if (curr == in.get_name()) {
+                q.push(out.get_name());
+            }
         }
     }
 
     return visited.count(in.get_name());
+}
+
+void add_edge(node_io in, node_io out)
+{
+    for (size_t i = 0; i < edges.size(); ++i) {
+        if (edges[i].second.get_name() == out.get_name() &&
+            edges[i].second.get_field() == out.get_field()) {
+            LogError("Pre-existing edge to " + out.get_name() + " " + out.get_field() +
+                     " found, replaced with new edge");
+            edges[i].first = in;
+            return;
+        }
+    }
+    edges.push_back({in, out});
 }
 
 // edge : out_field '->' id (' ')+ in_field ';' ;
@@ -549,13 +566,14 @@ static std::unique_ptr<expr_ast> parse_edge_expr(std::string first_cat)
               << " " << second_field << "\n";
     auto res = std::make_unique<edge_expr_ast>(node_io(first_cat, first_field),
                                                node_io(second_cat, second_field));
-    get_next_tok(); // eat field name
     if (contains_cycle(node_io(first_cat, first_field), node_io(second_cat, second_field))) {
         LogError("Edge from " + first_cat + " " + first_field + " -> " + second_cat + " " +
                  second_field + " creates a cycle. Ignored.");
-        return res;
+        get_next_tok(); // eat field name
+        return std::move(res);
     }
-    edges.push_back({node_io(first_cat, first_field), node_io(second_cat, second_field)});
+    add_edge(node_io(first_cat, first_field), node_io(second_cat, second_field));
+    get_next_tok(); // eat field name
     return std::move(res);
 }
 
@@ -607,6 +625,7 @@ static std::unique_ptr<LLVMContext> context;
 static std::unique_ptr<Module> module;
 static std::unique_ptr<IRBuilder<>> ir_builder;
 static std::map<std::string, Value*> named_values;
+static llvm::StructType *image_type, *image_wrapper_type;
 
 Value* log_error_v(std::string str)
 {
@@ -614,7 +633,7 @@ Value* log_error_v(std::string str)
     return nullptr;
 }
 
-Value* extern_funtion_gen()
+void ir_emission_init()
 {
     context = std::make_unique<LLVMContext>();
     module = std::make_unique<Module>("Eleminima module", *context);
@@ -622,7 +641,7 @@ Value* extern_funtion_gen()
     // Create a new builder for the module.
     ir_builder = std::make_unique<IRBuilder<>>(*context);
 
-    llvm::StructType* image_type = llvm::StructType::create(*context, "Image");
+    image_type = llvm::StructType::create(*context, "Image");
     image_type->setBody({
         llvm::Type::getInt32Ty(*context),                          // width
         llvm::Type::getInt32Ty(*context),                          // height
@@ -630,21 +649,17 @@ Value* extern_funtion_gen()
         llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0) // data (uint8_t*)
     });
 
-    llvm::StructType* image_wrapper_type = llvm::StructType::create(*context, "ImageWrapper");
+    image_wrapper_type = llvm::StructType::create(*context, "ImageWrapper");
     image_wrapper_type->setBody(
         llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0)); // void* instance
 
     // llvm::FunctionType* func_type = llvm::FunctionType::get(image_type, false);
     // llvm::Function* dummy_func = llvm::Function::Create(
     //     func_type, llvm::GlobalValue::ExternalLinkage, "dummy_func", module.get());
+}
 
-    // Make the function type:  double(double,double) etc.
-
-    // void image_grayscale_avg(ImageWrapper* img) {
-    //     static_cast<Image*>(img->instance)->grayscale_avg();
-    // }
-    // std::vector<Type*> Doubles(Args.size(), Type::getDoubleTy(*TheContext));
-
+Value* extern_funtion_gen()
+{
     // image_grayscale_avg
     FunctionType* func_type = FunctionType::get(
         llvm::Type::getVoidTy(*context), llvm::PointerType::get(image_wrapper_type, 0), false);
@@ -768,13 +783,14 @@ Value* node_expr_ast::code_gen() { return nullptr; }
 
 int main()
 {
-    extern_funtion_gen();
-    // get_next_tok();
-    // while (cur_tok != tok_eof) {
-    //     if (!parse_statement_expr()) {
-    //         break;
-    //     }
-    // }
+    // ir_emission_init();
+    // extern_funtion_gen();
+    get_next_tok();
+    while (cur_tok != tok_eof) {
+        if (!parse_statement_expr()) {
+            break;
+        }
+    }
 }
 
 // int tmp;
