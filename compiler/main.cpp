@@ -30,12 +30,15 @@
 using namespace llvm;
 
 enum Category {
-    Node,
+    node,
+    io,
 };
 
 enum NodeName {
-    Mix,
-    ColorRamp,
+    mix,
+    color_ramp,
+    image,
+    output,
 };
 
 enum Token {
@@ -273,6 +276,8 @@ class node_expr_ast : public expr_ast {
     }
 
     Value* code_gen() override;
+    Category get_cat() { return cat; }
+    NodeName get_name() { return name; }
 };
 
 } // namespace
@@ -424,6 +429,30 @@ static bool is_valid_node_name_given_cat(std::string cat, std::string node_name)
     return false;
 }
 
+static Category get_category(std::string cat)
+{
+    if (cat == "node") {
+        return Category::node;
+    }
+    else if (cat == "io") {
+        return Category::io;
+    }
+}
+
+static NodeName get_node_name(std::string nn)
+{
+    if (nn == "mix") {
+        return NodeName::mix;
+    }
+    else if (nn == "color_ramp") {
+        return NodeName::color_ramp;
+    }
+    else if (nn == "image") {
+        return NodeName::image;
+    }
+    return NodeName::output;
+}
+
 // definition : '=' type '{' { field_assignment } '}' ';' ;
 static std::unique_ptr<expr_ast> parse_defn_expr()
 {
@@ -493,7 +522,7 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
         // }
     }
     std::cerr << "Parsed node definition with " << fields.size() << " arguments\n";
-    auto res = std::make_unique<node_expr_ast>(Category::Node, NodeName::Mix, std::move(fields));
+    auto res = std::make_unique<node_expr_ast>(get_category(cat), get_node_name(node_name), std::move(fields));
     get_next_tok(); // eat the '}'
     return std::move(res);
 }
@@ -788,7 +817,12 @@ Value* edge_expr_ast::code_gen() { return nullptr; }
 
 Value* node_expr_ast::code_gen() { return nullptr; }
 
-void output_code_gen() {}
+void code_gen()
+{
+    for (auto& node : ::nodes) {
+        if (node.second->get_cat() == Category::
+    }
+}
 
 int main()
 {
