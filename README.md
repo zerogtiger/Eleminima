@@ -257,7 +257,7 @@ A few representative nodes are shown below. These will be prioritized in impleme
 "->" before a node means mandatory input. 
 Any options can be supplied by node input
 
-Node::image
+node::image
 {
     src: *src_of_image*,
 };

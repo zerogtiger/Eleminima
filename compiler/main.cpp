@@ -522,7 +522,8 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
         // }
     }
     std::cerr << "Parsed node definition with " << fields.size() << " arguments\n";
-    auto res = std::make_unique<node_expr_ast>(get_category(cat), get_node_name(node_name), std::move(fields));
+    auto res = std::make_unique<node_expr_ast>(get_category(cat), get_node_name(node_name),
+                                               std::move(fields));
     get_next_tok(); // eat the '}'
     return std::move(res);
 }
@@ -815,12 +816,52 @@ Value* field_assgn_ast::code_gen() { return nullptr; }
 
 Value* edge_expr_ast::code_gen() { return nullptr; }
 
-Value* node_expr_ast::code_gen() { return nullptr; }
+Value* node_expr_ast::code_gen()
+{
+    if (cat == io && name == image) {
+
+        // check src before accessing
+        string_expr_ast* src = static_cast<string_expr_ast*>(fields["src"].get());
+
+        std::vector<Value*> args_v;
+
+        args_v.push_back(src->code_gen());
+
+        Function* callee_f = module->getFunction("image_create_from_file");
+
+        if (!callee_f)
+            return log_error_v("Unknown function referenced");
+
+        if (callee_f->arg_size() != args_v.size())
+            return log_error_v("Incorrect # arguments passed");
+
+        return ir_builder->CreateCall(callee_f, args_v);
+
+        // node::image
+        // {
+        //     src: *src_of_image*,
+        // };
+        // -> output image
+    }
+    return nullptr;
+}
 
 void code_gen()
 {
+    std::vector<std::string> st;
     for (auto& node : ::nodes) {
-        if (node.second->get_cat() == Category::
+        // for each output, go through entire tree again
+        if (node.second->get_name() == NodeName::output) {
+            st.clear();
+            st.push_back(node.first); // current output
+            for (auto& e : reverse_edges[node.first]) {
+                st.push_back(e.second.get_name()); // push all input nodes into stack
+            }
+        }
+        while (st.empty()) {
+            std::string curr = st.back();
+            st.pop_back();
+        }
     }
 }
 
