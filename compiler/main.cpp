@@ -37,6 +37,7 @@ enum Category {
 enum NodeName {
     mix,
     color_ramp,
+    greyscale_avg,
     image,
     output,
 };
@@ -246,6 +247,7 @@ class node_io {
     std::string field;
 
   public:
+    node_io() = default;
     node_io(std::string name, std::string field) : name{std::move(name)}, field{std::move(field)} {}
     const std::string& get_name() { return name; }
     const std::string& get_field() { return field; }
@@ -267,10 +269,11 @@ class node_expr_ast : public expr_ast {
     Category cat;
     NodeName name;
     std::map<std::string, std::unique_ptr<expr_ast>> fields;
+    std::map<std::string, node_io> in_edges, out_edges;
 
   public:
     node_expr_ast(Category cat, NodeName name,
-                  std::map<std::string, std::unique_ptr<expr_ast>> fields)
+                  std::map<std::string, std::unique_ptr<expr_ast>>&& fields)
         : cat{cat}, name{name}, fields{std::move(fields)}
     {
     }
@@ -278,6 +281,20 @@ class node_expr_ast : public expr_ast {
     Value* code_gen() override;
     Category get_cat() { return cat; }
     NodeName get_name() { return name; }
+
+    void add_in_edge(std::string field_name, std::string dest_name, std::string dest_field)
+    {
+        in_edges[field_name] = ::node_io(dest_name, dest_field);
+    }
+
+    void add_out_edge(std::string field_name, std::string src_name, std::string src_field)
+    {
+        out_edges[field_name] = ::node_io(src_name, src_field);
+    }
+
+    std::map<std::string, node_io>& get_in_edges() { return in_edges; }
+
+    std::map<std::string, node_io>& get_out_edges() { return out_edges; }
 };
 
 } // namespace
@@ -287,8 +304,8 @@ static int get_next_tok() { return cur_tok = get_tok(); }
 
 static std::map<std::string, std::unique_ptr<node_expr_ast>> nodes;
 // static std::vector<std::pair<node_io, node_io>> edges; // directed edges
-static std::map<std::string, std::vector<std::pair<std::string, node_io>>> forward_edges;
-static std::map<std::string, std::vector<std::pair<std::string, node_io>>> reverse_edges;
+// static std::map<std::string, std::vector<std::pair<std::string, node_io>>> forward_edges;
+// static std::map<std::string, std::vector<std::pair<std::string, node_io>>> reverse_edges;
 
 // LogError* - These are little helper functions for error handling.
 std::unique_ptr<expr_ast> LogError(std::string str)
@@ -421,7 +438,7 @@ static bool is_valid_category(std::string cat) { return cat == "node" || cat == 
 static bool is_valid_node_name_given_cat(std::string cat, std::string node_name)
 {
     if (cat == "node") {
-        return node_name == "mix" || node_name == "color_ramp";
+        return node_name == "mix" || node_name == "color_ramp" || node_name == "greyscale_avg";
     }
     if (cat == "io") {
         return node_name == "image" || node_name == "output";
@@ -434,15 +451,16 @@ static Category get_category(std::string cat)
     if (cat == "node") {
         return Category::node;
     }
-    else if (cat == "io") {
-        return Category::io;
-    }
+    return Category::io;
 }
 
 static NodeName get_node_name(std::string nn)
 {
     if (nn == "mix") {
         return NodeName::mix;
+    }
+    else if (nn == "greyscale_avg") {
+        return NodeName::greyscale_avg;
     }
     else if (nn == "color_ramp") {
         return NodeName::color_ramp;
@@ -512,7 +530,9 @@ static std::unique_ptr<expr_ast> parse_defn_expr()
         else {
             break;
         }
-        fields[field_name] = std::move(std::move(arg));
+        fields[field_name] = std::move(arg);
+
+        // fields.insert({field_name, std::move(arg)});
 
         // auto res = std::make_unique<field_assgn_ast>(field_name, std::move(arg));
         // std::string arg_name = id_name;
@@ -545,7 +565,7 @@ static bool contains_cycle(node_io in, node_io out)
         if (curr == in.get_name()) {
             q.push(out.get_name());
         }
-        for (auto& e : forward_edges[curr]) {
+        for (auto& e : ::nodes[curr]->get_out_edges()) {
             q.push(e.second.get_name());
         }
     }
@@ -553,28 +573,20 @@ static bool contains_cycle(node_io in, node_io out)
     return visited.count(in.get_name());
 }
 
-void add_edge(node_io in, node_io out)
+void add_edge(node_io src, node_io dest)
 {
-    for (size_t i = 0; i < reverse_edges[out.get_name()].size(); ++i) {
-        if (reverse_edges[out.get_name()][i].first == out.get_field()) {
 
-            LogError("Pre-existing edge to " + out.get_name() + " " + out.get_field() +
-                     " found, replaced with new edge");
+    auto dest_node = ::nodes[dest.get_name()].get();
+    if (::nodes[dest.get_name()]->get_in_edges().count(dest.get_field())) {
 
-            std::string old_in = reverse_edges[out.get_name()][i].second.get_name();
-            reverse_edges[out.get_name()][i] = {out.get_field(), in};
+        LogError("Pre-existing edge to " + dest.get_name() + " " + dest.get_field() +
+                 " found, replaced with new edge");
 
-            for (size_t j = 0; j < forward_edges[old_in].size(); ++j) {
-                if (forward_edges[old_in][j].second == out) {
-                    forward_edges[old_in].erase(forward_edges[old_in].begin() + j);
-                }
-            }
-            forward_edges[in.get_name()].push_back({in.get_field(), out});
-            return;
-        }
+        node_io old_src = dest_node->get_in_edges()[dest.get_field()];
+        ::nodes[old_src.get_name()]->get_out_edges().erase(old_src.get_field());
     }
-    forward_edges[in.get_name()].push_back({in.get_field(), out});
-    reverse_edges[out.get_name()].push_back({out.get_field(), in});
+    dest_node->get_in_edges()[dest.get_field()] = src;
+    ::nodes[src.get_name()]->get_out_edges()[src.get_field()] = dest;
 }
 
 // edge : out_field '->' id (' ')+ in_field ';' ;
@@ -675,7 +687,7 @@ Value* log_error_v(std::string str)
     return nullptr;
 }
 
-void ir_emission_init()
+void ir_type_def()
 {
     context = std::make_unique<LLVMContext>();
     module = std::make_unique<Module>("Eleminima module", *context);
@@ -731,57 +743,58 @@ Value* extern_funtion_gen()
     arg_iter->setName("img");
     (++arg_iter)->setName("filename");
 
-    // Look up the name in the global module table.
-    Function* callee_f = module->getFunction("image_create_from_file");
-
-    if (!callee_f)
-        return log_error_v("Unknown function referenced");
-
-    std::vector<Value*> args_v;
-
-    func_type = llvm::FunctionType::get(llvm::Type::getVoidTy(*context), {}, false);
-    func = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage, "main", module.get());
-    llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
-    ir_builder->SetInsertPoint(bb);
-
-    llvm::Value* str_ptr = ir_builder->CreateGlobalStringPtr(
-        "/Users/tigerding/Projects/eleminima/runtime/demo/original/demo.jpeg", "str");
-    args_v.push_back(str_ptr);
-
-    if (callee_f->arg_size() != args_v.size())
-        return log_error_v("Incorrect # arguments passed");
-
-    auto calltmp = ir_builder->CreateCall(callee_f, args_v, "calltmp");
-
-    args_v.clear();
-    // Look up the name in the global module table.
-    callee_f = module->getFunction("image_grayscale_avg");
-    args_v.push_back(calltmp);
-
-    if (!callee_f)
-        return log_error_v("Unknown function referenced");
-
-    if (callee_f->arg_size() != args_v.size())
-        return log_error_v("Incorrect # arguments passed");
-
-    ir_builder->CreateCall(callee_f, args_v);
-
-    args_v.clear();
-    // Look up the name in the global module table.
-    callee_f = module->getFunction("image_write");
-    args_v.push_back(calltmp);
-    str_ptr =
-        ir_builder->CreateGlobalStringPtr("/Users/tigerding/Projects/eleminima/demo.jpeg", "str");
-    args_v.push_back(str_ptr);
-
-    if (!callee_f)
-        return log_error_v("Unknown function referenced");
-
-    if (callee_f->arg_size() != args_v.size())
-        return log_error_v("Incorrect # arguments passed");
-
-    calltmp = ir_builder->CreateCall(callee_f, args_v);
-    ir_builder->CreateRetVoid();
+    // // Look up the name in the global module table.
+    // Function* callee_f = module->getFunction("image_create_from_file");
+    //
+    // if (!callee_f)
+    //     return log_error_v("Unknown function referenced");
+    //
+    // std::vector<Value*> args_v;
+    //
+    // func_type = llvm::FunctionType::get(llvm::Type::getVoidTy(*context), {}, false);
+    // func = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage, "main",
+    // module.get()); llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
+    // ir_builder->SetInsertPoint(bb);
+    //
+    // llvm::Value* str_ptr = ir_builder->CreateGlobalStringPtr(
+    //     "/Users/tigerding/Projects/eleminima/runtime/demo/original/demo.jpeg", "str");
+    // args_v.push_back(str_ptr);
+    //
+    // if (callee_f->arg_size() != args_v.size())
+    //     return log_error_v("Incorrect # arguments passed");
+    //
+    // auto calltmp = ir_builder->CreateCall(callee_f, args_v, "calltmp");
+    //
+    // args_v.clear();
+    // // Look up the name in the global module table.
+    // callee_f = module->getFunction("image_grayscale_avg");
+    // args_v.push_back(calltmp);
+    //
+    // if (!callee_f)
+    //     return log_error_v("Unknown function referenced");
+    //
+    // if (callee_f->arg_size() != args_v.size())
+    //     return log_error_v("Incorrect # arguments passed");
+    //
+    // ir_builder->CreateCall(callee_f, args_v);
+    //
+    // args_v.clear();
+    // // Look up the name in the global module table.
+    // callee_f = module->getFunction("image_write");
+    // args_v.push_back(calltmp);
+    // str_ptr =
+    //     ir_builder->CreateGlobalStringPtr("/Users/tigerding/Projects/eleminima/demo.jpeg",
+    //     "str");
+    // args_v.push_back(str_ptr);
+    //
+    // if (!callee_f)
+    //     return log_error_v("Unknown function referenced");
+    //
+    // if (callee_f->arg_size() != args_v.size())
+    //     return log_error_v("Incorrect # arguments passed");
+    //
+    // calltmp = ir_builder->CreateCall(callee_f, args_v);
+    // ir_builder->CreateRetVoid();
 
     return nullptr;
 }
@@ -836,33 +849,82 @@ Value* node_expr_ast::code_gen()
             return log_error_v("Incorrect # arguments passed");
 
         return ir_builder->CreateCall(callee_f, args_v);
-
-        // node::image
-        // {
-        //     src: *src_of_image*,
-        // };
-        // -> output image
     }
+    else if (cat == io && name == output) {
+
+        // check src before accessing
+        string_expr_ast* dest = static_cast<string_expr_ast*>(fields["dest"].get());
+
+        std::vector<Value*> args_v;
+
+        args_v.push_back(named_values[in_edges["src"].get_name()]);
+        args_v.push_back(dest->code_gen());
+
+        Function* callee_f = module->getFunction("image_write");
+
+        if (!callee_f)
+            return log_error_v("Unknown function referenced");
+
+        if (callee_f->arg_size() != args_v.size())
+            return log_error_v("Incorrect # arguments passed");
+
+        return ir_builder->CreateCall(callee_f, args_v);
+    }
+    else if (cat == node && name == greyscale_avg) {
+
+        std::vector<Value*> args_v;
+
+        args_v.push_back(named_values[in_edges["src"].get_name()]);
+
+        Function* callee_f = module->getFunction("image_grayscale_avg");
+
+        if (!callee_f)
+            return log_error_v("Unknown function referenced");
+
+        if (callee_f->arg_size() != args_v.size())
+            return log_error_v("Incorrect # arguments passed");
+
+        ir_builder->CreateCall(callee_f, args_v);
+        return named_values[in_edges["src"].get_name()];
+    }
+
     return nullptr;
 }
 
 void code_gen()
 {
+    FunctionType* func_type = llvm::FunctionType::get(llvm::Type::getVoidTy(*context), {}, false);
+    Function* func =
+        llvm::Function::Create(func_type, llvm::Function::ExternalLinkage, "main", module.get());
+    llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
+    ir_builder->SetInsertPoint(bb);
+
     std::vector<std::string> st;
     for (auto& node : ::nodes) {
         // for each output, go through entire tree again
         if (node.second->get_name() == NodeName::output) {
             st.clear();
             st.push_back(node.first); // current output
-            for (auto& e : reverse_edges[node.first]) {
-                st.push_back(e.second.get_name()); // push all input nodes into stack
+            // for (auto& e : node.second->get_in_edges()) {
+            //     st.push_back(e.second.get_name()); // push all input nodes into stack
+            // }
+        }
+        std::map<std::string, bool> visited;
+        while (!st.empty()) {
+            std::string curr = st.back();
+            if (visited[curr]) {
+                st.pop_back();
+                named_values[curr] = ::nodes[curr]->code_gen();
+            }
+            else {
+                visited[curr] = true;
+                for (auto &e : ::nodes[curr]->get_in_edges()) {
+                    st.push_back(e.second.get_name());
+                }
             }
         }
-        while (st.empty()) {
-            std::string curr = st.back();
-            st.pop_back();
-        }
     }
+    ir_builder->CreateRetVoid();
 }
 
 int main()
@@ -874,8 +936,10 @@ int main()
         }
     }
 
-    ir_emission_init();
+    ir_type_def();
     extern_funtion_gen();
+
+    code_gen();
 
     module->print(errs(), nullptr);
     std::error_code ec;
@@ -883,168 +947,3 @@ int main()
     module->print(out_file, nullptr);
     out_file.close();
 }
-
-// int tmp;
-// while ((tmp = get_tok()) != tok_eof) {
-//     switch (tmp) {
-//     case -1:
-//         std::cerr << "EOF";
-//         break;
-//     case -2:
-//         std::cerr << "Identifier: " << id_name;
-//         break;
-//     case -3:
-//         std::cerr << "Number: " << num_val;
-//         break;
-//     case -4:
-//         std::cerr << "String: " << str_val;
-//         break;
-//     case -5:
-//         std::cerr << "Arrow";
-//         break;
-//     case -6:
-//         std::cerr << "Scope res op";
-//         break;
-//     default:
-//         std::cerr << (char) tmp;
-//     }
-//     std::cerr << "\n";
-// }
-// ---
-
-// class var_expr_ast : public expr_ast {
-//     std::string name;
-//     std::unique_ptr<node_expr_ast> node;
-//
-//   public:
-//     var_expr_ast(std::string name, std::unique_ptr<node_expr_ast> node)
-//         : name{name}, node{std::move(node)}
-//     {
-//     }
-//
-//     Value* code_gen() override;
-// };
-//
-// Value* var_expr_ast::code_gen() {
-//     return nullptr;
-// }
-
-// field_assignment : id ':' argument [',']
-// static std::unique_ptr<expr_ast> parse_field_assgn_expr()
-// {
-//     std::string field_name = id_name;
-//     get_next_tok(); // eat id name
-//     if (cur_tok != ':') {
-//         return LogError("Expected ':' for field assignment");
-//     }
-//     get_next_tok(); // eat :
-//     auto arg = parse_argument_expr();
-//     if (!arg) {
-//         return nullptr;
-//     }
-//     auto res = std::make_unique<field_assgn_ast>(field_name, std::move(arg));
-//     std::cerr << "Parsed argument with name " << field_name << "\n";
-//     get_next_tok();
-//     return res;
-// }
-
-// // out_field : [type '::'] id
-// static std::unique_ptr<expr_ast> parse_field_expr()
-// {
-//     std::string type = id_name;
-//     get_next_tok(); // eat id name
-// }
-// static std::unique_ptr<expr_ast> parse_node_expr()
-// {
-//     std::string id_str = id_name;
-//
-//     if (cur_tok != tok_scope_res_op) {
-//         return LogError("Expected \"::\"");
-//     }
-//     get_next_tok(); // eat "::"
-//     if (cur_tok != Token::tok_id) {
-//         return LogError("Expected node name");
-//     }
-//     std::string node_name = id_str; // check validity
-//     if (cur_tok != '{') {
-//         return LogError("Expected { in node declaration");
-//     }
-//     get_next_tok(); // eat {
-//     std::map<std::string, std::unique_ptr<expr_ast>> fields;
-//     while (cur_tok != '}') {
-//         if (cur_tok != tok_id) {
-//             return LogError("Expected field name in node declaration");
-//         }
-//         std::string arg_name = id_name;
-//         fields[arg_name] = std::move(parse_argument());
-//         if (cur_tok == ',') {
-//             get_next_tok();
-//         }
-//     }
-//     auto res = std::make_unique<node_expr_ast>(Category::Node, NodeName::Mix, fields);
-//     get_next_tok(); // eat the '}'
-//     return std::move(res);
-// }
-
-// category : 'Node'
-
-// static std::unique_ptr<expr_ast> parse_paren_expr()
-// {
-//     get_next_tok(); // eat (.
-//     auto V = parse_expr();
-//     if (!V)
-//         return nullptr;
-//
-//     if (cur_tok != ')')
-//         return LogError("expected ')'");
-//     get_next_tok();
-//     return V;
-// }
-// static std::unique_ptr<expr_ast> parse_argument() {}
-//
-//
-// static std::unique_ptr<expr_ast> parse_id_expr()
-// {
-//     std::string id_str = id_name;
-//
-//     get_next_tok(); // eat identifier.
-//
-//     if (cur_tok == '=') { // node variable declaration
-//         get_next_tok();   // eat '='
-//         auto node_defn = parse_node_expr();
-//         if (!node_defn) {
-//             return nullptr;
-//         }
-//         std::unique_ptr<node_expr_ast> node_ptr =
-//             std::unique_ptr<node_expr_ast>(static_cast<node_expr_ast*>(node_defn.release()));
-//         // auto var_defn = std::make_unique<var_expr_ast>(id_str, std::move(node_ptr));
-//         nodes[id_str] = std::move(node_ptr);
-//         return nullptr;
-//     }
-//
-//     if (cur_tok == tok_id) { // edge
-//         std::string first_field = id_name;
-//
-//         get_next_tok(); // eat field name
-//         if (cur_tok != tok_arrow) {
-//             return LogError("Expected arrow \"->\" in edge declaration");
-//         }
-//         get_next_tok(); // eat arrow
-//         if (cur_tok != tok_id) {
-//             return LogError("Expected node category in edge declaration");
-//         }
-//         std::string second_cat = id_name;
-//         get_next_tok(); // eat second node var
-//         if (cur_tok != tok_id) {
-//             return LogError("Expected field name in edge declaration");
-//         }
-//         std::string second_field = id_name;
-//         get_next_tok(); // eat field name
-//
-//         edges.push_back({node_io(id_str, first_field), node_io(second_cat, second_field)});
-//         return nullptr;
-//     }
-//
-//
-// }
-//

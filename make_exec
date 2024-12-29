@@ -1,0 +1,3 @@
+llc -filetype=obj module_output.ll -o program.o
+clang++ program.o runtime/image.o runtime/wrapper.o runtime/schrift.o -o exec
+

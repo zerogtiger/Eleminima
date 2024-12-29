@@ -12,8 +12,8 @@ declare i1 @image_write(ptr, ptr)
 
 define void @main() {
 entry:
-  %calltmp = call ptr @image_create_from_file(ptr @str)
-  call void @image_grayscale_avg(ptr %calltmp)
-  %0 = call i1 @image_write(ptr %calltmp, ptr @str.1)
+  %0 = call ptr @image_create_from_file(ptr @str)
+  call void @image_grayscale_avg(ptr %0)
+  %1 = call i1 @image_write(ptr %0, ptr @str.1)
   ret void
 }

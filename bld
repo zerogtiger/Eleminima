@@ -1,2 +1,2 @@
-clang++ -o exec `llvm-config --cxxflags --ldflags --system-libs --libs core` compiler/main.cpp
+clang++ -o ele `llvm-config --cxxflags --ldflags --system-libs --libs core` compiler/main.cpp
 

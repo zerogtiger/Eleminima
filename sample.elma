@@ -1,0 +1,15 @@
+input = io::image 
+{
+    src: "/Users/tigerding/Projects/eleminima/runtime/demo/original/demo.jpeg",
+}
+
+greyscale = node::greyscale_avg {}
+
+output = io::output 
+{
+    dest: "/Users/tigerding/Projects/eleminima/demo.jpeg",
+}
+
+input output -> greyscale src
+greyscale src -> output src
+
