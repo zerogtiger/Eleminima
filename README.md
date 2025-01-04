@@ -2,6 +2,8 @@
 
 Pre-alpha release in progress.
 
+For supported nodes in this version, see [docs.md](docs.md)
+
 ## EBNF Grammar definition
 
 ```EBNF

@@ -73,12 +73,6 @@ typedef struct PointColorPair {
     ColorWrapper* color;
 } PointColorPair;
 
-// Constructor Wrappers
-ImageWrapper* image_create_from_file(const char* filename)
-{
-    return new ImageWrapper{new Image(filename)};
-}
-
 ColorWrapper* color_create_default() { return new ColorWrapper{new Color{}}; }
 
 ColorWrapper* color_create_rgb(double r, double g, double b)
@@ -93,12 +87,20 @@ ColorWrapper* color_create_rgba(double r, double g, double b, double a)
 
 void color_destroy(ColorWrapper* color) { delete reinterpret_cast<Color*>(color->instance); }
 
-// ImageWrapper* image_create(int w, int h, int channels) {
-//     return new ImageWrapper{ new Image(w, h, channels) };
-// }
+ImageWrapper* image_create_w_h_channels(int w, int h, int channels)
+{
+    return new ImageWrapper{new Image(w, h, channels)};
+}
 
-// Destructor Wrapper
-void image_destroy(ImageWrapper* img) { delete reinterpret_cast<Image*>(img->instance); }
+ImageWrapper* image_create_w_h_channels_fill(int w, int h, int channels, ColorWrapper* fill)
+{
+    return new ImageWrapper{new Image(w, h, channels, *reinterpret_cast<Color*>(fill))};
+}
+
+ImageWrapper* image_create_filename(const char* filename)
+{
+    return new ImageWrapper{new Image(filename)};
+}
 
 // Method Wrappers
 bool image_read(ImageWrapper* img, const char* filename)
@@ -111,6 +113,9 @@ bool image_write(ImageWrapper* img, const char* filename)
     return reinterpret_cast<Image*>(img->instance)->write(filename);
 }
 
+// Destructor Wrapper
+void image_destroy(ImageWrapper* img) { delete reinterpret_cast<Image*>(img->instance); }
+
 // uint8_t image_get_pixel(ImageWrapper* img, uint32_t row, uint32_t col, uint32_t channel) {
 //     return reinterpret_cast<Image*>(img->instance)->get(row, col, channel);
 // }
@@ -121,9 +126,15 @@ bool image_write(ImageWrapper* img, const char* filename)
 // }
 
 // Grayscale example
-void image_grayscale_avg(ImageWrapper* img) { reinterpret_cast<Image*>(img->instance)->grayscale_avg(); }
+void image_grayscale_avg(ImageWrapper* img)
+{
+    reinterpret_cast<Image*>(img->instance)->grayscale_avg();
+}
 
-void image_grayscale_lum(ImageWrapper* img) { reinterpret_cast<Image*>(img->instance)->grayscale_lum(); }
+void image_grayscale_lum(ImageWrapper* img)
+{
+    reinterpret_cast<Image*>(img->instance)->grayscale_lum();
+}
 
 void image_crop(ImageWrapper* img, uint16_t cx, uint16_t cy, uint16_t cw, uint16_t ch)
 {
@@ -133,7 +144,8 @@ void image_crop(ImageWrapper* img, uint16_t cx, uint16_t cy, uint16_t cw, uint16
 void image_f_scale(ImageWrapper* img, uint32_t new_w, uint32_t new_h, bool linked,
                    TwoDimInterpC method)
 {
-    reinterpret_cast<Image*>(img->instance)->f_scale(new_w, new_h, linked, map_two_dim_interp(method));
+    reinterpret_cast<Image*>(img->instance)
+        ->f_scale(new_w, new_h, linked, map_two_dim_interp(method));
 }
 
 ImageWrapper* image_histogram(ImageWrapper* img, bool inc_lum)
