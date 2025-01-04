@@ -1,8 +1,6 @@
 # Eleminima: declarative graphics compositing language
 
-Update Sep. 2nd, 2024: This project will be built with LLVM. 
-
-Building in progress... please stand by. 
+Pre-alpha release in progress.
 
 ## EBNF Grammar definition
 

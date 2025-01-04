@@ -30,14 +30,19 @@
 using namespace llvm;
 
 enum Category {
-    node,
     io,
+    spacial,
+    stats,
+    color,
 };
 
 enum NodeName {
+    crop,
+    scale,
+    histogram,
     mix,
     color_ramp,
-    greyscale_avg,
+    grayscale,
     image,
     output,
 };
@@ -193,6 +198,8 @@ class number_expr_ast : public expr_ast {
   public:
     number_expr_ast(double val) : val{val} {}
 
+    double get_val() { return val; }
+
     Value* code_gen() override;
 };
 
@@ -204,6 +211,7 @@ class string_expr_ast : public expr_ast {
     string_expr_ast(std::string str) : str{str} {}
 
     Value* code_gen() override;
+    std::string& get_str() { return str; }
 };
 
 class call_expr_ast : public expr_ast {
@@ -303,9 +311,6 @@ static int cur_tok;
 static int get_next_tok() { return cur_tok = get_tok(); }
 
 static std::map<std::string, std::unique_ptr<node_expr_ast>> nodes;
-// static std::vector<std::pair<node_io, node_io>> edges; // directed edges
-// static std::map<std::string, std::vector<std::pair<std::string, node_io>>> forward_edges;
-// static std::map<std::string, std::vector<std::pair<std::string, node_io>>> reverse_edges;
 
 // LogError* - These are little helper functions for error handling.
 std::unique_ptr<expr_ast> LogError(std::string str)
@@ -433,12 +438,21 @@ static std::unique_ptr<expr_ast> parse_argument_expr()
 //     std::string node_name = id_name;
 // }
 
-static bool is_valid_category(std::string cat) { return cat == "node" || cat == "io"; }
+static bool is_valid_category(std::string cat)
+{
+    return cat == "color" || cat == "spacial" || cat == "stats" || cat == "io";
+}
 
 static bool is_valid_node_name_given_cat(std::string cat, std::string node_name)
 {
-    if (cat == "node") {
-        return node_name == "mix" || node_name == "color_ramp" || node_name == "greyscale_avg";
+    if (cat == "spacial") {
+        return node_name == "crop" || node_name == "scale";
+    }
+    if (cat == "stats") {
+        return node_name == "histogram";
+    }
+    if (cat == "color") {
+        return node_name == "color_ramp" || node_name == "mix" || node_name == "grayscale";
     }
     if (cat == "io") {
         return node_name == "image" || node_name == "output";
@@ -448,8 +462,14 @@ static bool is_valid_node_name_given_cat(std::string cat, std::string node_name)
 
 static Category get_category(std::string cat)
 {
-    if (cat == "node") {
-        return Category::node;
+    if (cat == "spacial") {
+        return Category::spacial;
+    }
+    if (cat == "stats") {
+        return Category::stats;
+    }
+    if (cat == "color") {
+        return Category::color;
     }
     return Category::io;
 }
@@ -459,14 +479,23 @@ static NodeName get_node_name(std::string nn)
     if (nn == "mix") {
         return NodeName::mix;
     }
-    else if (nn == "greyscale_avg") {
-        return NodeName::greyscale_avg;
+    else if (nn == "grayscale") {
+        return NodeName::grayscale;
     }
     else if (nn == "color_ramp") {
         return NodeName::color_ramp;
     }
     else if (nn == "image") {
         return NodeName::image;
+    }
+    else if (nn == "crop") {
+        return NodeName::crop;
+    }
+    else if (nn == "scale") {
+        return NodeName::scale;
+    }
+    else if (nn == "histogram") {
+        return NodeName::histogram;
     }
     return NodeName::output;
 }
@@ -722,6 +751,13 @@ Value* extern_funtion_gen()
     for (auto& arg : func->args())
         arg.setName("img");
 
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  llvm::PointerType::get(image_wrapper_type, 0), false);
+    func =
+        Function::Create(func_type, Function::ExternalLinkage, "image_grayscale_lum", module.get());
+    for (auto& arg : func->args())
+        arg.setName("img");
+
     // image_create_from_file
     func_type =
         FunctionType::get(llvm::PointerType::get(image_wrapper_type, 0),
@@ -857,7 +893,7 @@ Value* node_expr_ast::code_gen()
 
         std::vector<Value*> args_v;
 
-        args_v.push_back(named_values[in_edges["src"].get_name()]);
+        args_v.push_back(named_values[in_edges["image"].get_name()]);
         args_v.push_back(dest->code_gen());
 
         Function* callee_f = module->getFunction("image_write");
@@ -870,13 +906,18 @@ Value* node_expr_ast::code_gen()
 
         return ir_builder->CreateCall(callee_f, args_v);
     }
-    else if (cat == node && name == greyscale_avg) {
+    else if (cat == color && name == grayscale) {
 
         std::vector<Value*> args_v;
-
-        args_v.push_back(named_values[in_edges["src"].get_name()]);
-
-        Function* callee_f = module->getFunction("image_grayscale_avg");
+        Function* callee_f;
+        if (fields.count("method") &&
+            static_cast<string_expr_ast*>(fields["method"].get())->get_str() == "avg") {
+            callee_f = module->getFunction("image_grayscale_avg");
+        }
+        else {
+            callee_f = module->getFunction("image_grayscale_lum");
+        }
+        args_v.push_back(named_values[in_edges["image"].get_name()]);
 
         if (!callee_f)
             return log_error_v("Unknown function referenced");
@@ -885,7 +926,29 @@ Value* node_expr_ast::code_gen()
             return log_error_v("Incorrect # arguments passed");
 
         ir_builder->CreateCall(callee_f, args_v);
-        return named_values[in_edges["src"].get_name()];
+        return named_values[in_edges["image"].get_name()];
+    }
+    else if (cat == stats && name == histogram) {
+
+        std::vector<Value*> args_v;
+        Function* callee_f = module->getFunction("image_histogram");
+
+        args_v.push_back(named_values[in_edges["image"].get_name()]);
+        if (fields.count("include_lum") &&
+            static_cast<number_expr_ast*>(fields["include_lum"].get())->get_val() == 0) {
+            args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 0));
+        }
+        else {
+            args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 1));
+        }
+
+        if (!callee_f)
+            return log_error_v("Unknown function referenced");
+
+        // if (callee_f->arg_size() != args_v.size())
+        //     return log_error_v("Incorrect # arguments passed");
+
+        return ir_builder->CreateCall(callee_f, args_v);
     }
 
     return nullptr;
@@ -918,7 +981,7 @@ void code_gen()
             }
             else {
                 visited[curr] = true;
-                for (auto &e : ::nodes[curr]->get_in_edges()) {
+                for (auto& e : ::nodes[curr]->get_in_edges()) {
                     st.push_back(e.second.get_name());
                 }
             }
