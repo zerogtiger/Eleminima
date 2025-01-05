@@ -707,7 +707,7 @@ static bool parse_statement_expr()
 static std::unique_ptr<LLVMContext> context;
 static std::unique_ptr<Module> module;
 static std::unique_ptr<IRBuilder<>> ir_builder;
-static std::map<std::string, Value*> named_values;
+static std::map<std::string, std::map<std::string, Value*>> named_values;
 static llvm::StructType *image_wrapper_type, *color_wrapper_type, *point_color_pair_type;
 
 Value* log_error_v(std::string str)
@@ -1129,7 +1129,7 @@ Value* node_expr_ast::code_gen()
 
         std::vector<Value*> args_v;
 
-        args_v.push_back(named_values[in_edges["image"].get_name()]);
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
         args_v.push_back(dest->code_gen());
 
         Function* callee_f = module->getFunction("image_write");
@@ -1153,7 +1153,7 @@ Value* node_expr_ast::code_gen()
         else {
             callee_f = module->getFunction("image_grayscale_lum");
         }
-        args_v.push_back(named_values[in_edges["image"].get_name()]);
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
 
         if (!callee_f)
             return log_error_v("Unknown function referenced");
@@ -1162,14 +1162,14 @@ Value* node_expr_ast::code_gen()
             return log_error_v("Incorrect # arguments passed");
 
         ir_builder->CreateCall(callee_f, args_v);
-        return named_values[in_edges["image"].get_name()];
+        return named_values[in_edges["image"].get_name()][in_edges["image"].get_field()];
     }
     else if (cat == stats && name == histogram) {
 
         std::vector<Value*> args_v;
         Function* callee_f = module->getFunction("image_histogram");
 
-        args_v.push_back(named_values[in_edges["image"].get_name()]);
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
         if (fields.count("include_lum") &&
             static_cast<number_expr_ast*>(fields["include_lum"].get())->get_val() == 0) {
             args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 0));
@@ -1198,27 +1198,27 @@ void code_gen()
     llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
     ir_builder->SetInsertPoint(bb);
 
-    std::vector<std::string> st;
+    std::vector<std::pair<std::string, std::string>> st;
     for (auto& node : ::nodes) {
         // for each output, go through entire tree again
         if (node.second->get_name() == NodeName::output) {
             st.clear();
-            st.push_back(node.first); // current output
+            st.push_back({node.first, "image"}); // current output
             // for (auto& e : node.second->get_in_edges()) {
             //     st.push_back(e.second.get_name()); // push all input nodes into stack
             // }
         }
         std::map<std::string, bool> visited;
         while (!st.empty()) {
-            std::string curr = st.back();
-            if (visited[curr]) {
+            auto curr = st.back();
+            if (visited[curr.first]) {
                 st.pop_back();
-                named_values[curr] = ::nodes[curr]->code_gen();
+                named_values[curr.first][curr.second] = ::nodes[curr.first]->code_gen();
             }
             else {
-                visited[curr] = true;
-                for (auto& e : ::nodes[curr]->get_in_edges()) {
-                    st.push_back(e.second.get_name());
+                visited[curr.first] = true;
+                for (auto& e : ::nodes[curr.first]->get_in_edges()) {
+                    st.push_back({e.second.get_name(), e.second.get_field()});
                 }
             }
         }
