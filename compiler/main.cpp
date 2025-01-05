@@ -708,7 +708,7 @@ static std::unique_ptr<LLVMContext> context;
 static std::unique_ptr<Module> module;
 static std::unique_ptr<IRBuilder<>> ir_builder;
 static std::map<std::string, Value*> named_values;
-static llvm::StructType *image_type, *image_wrapper_type;
+static llvm::StructType *image_wrapper_type, *color_wrapper_type, *point_color_pair_type;
 
 Value* log_error_v(std::string str)
 {
@@ -720,21 +720,29 @@ void ir_type_def()
 {
     context = std::make_unique<LLVMContext>();
     module = std::make_unique<Module>("Eleminima module", *context);
-
-    // Create a new builder for the module.
     ir_builder = std::make_unique<IRBuilder<>>(*context);
 
-    image_type = llvm::StructType::create(*context, "Image");
-    image_type->setBody({
-        llvm::Type::getInt32Ty(*context),                          // width
-        llvm::Type::getInt32Ty(*context),                          // height
-        llvm::Type::getInt32Ty(*context),                          // channels
-        llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0) // data (uint8_t*)
-    });
-
+    // typedefs
     image_wrapper_type = llvm::StructType::create(*context, "ImageWrapper");
     image_wrapper_type->setBody(
         llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0)); // void* instance
+
+    color_wrapper_type = llvm::StructType::create(*context, "ColorWrapper");
+    color_wrapper_type->setBody(
+        llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0)); // void* instance
+
+    point_color_pair_type = llvm::StructType::create(*context, "PointColorPair");
+    std::vector<llvm::Type*> point_color_struct_types = {
+        llvm::Type::getDoubleTy(*context), llvm::PointerType::get(color_wrapper_type, 0)};
+    point_color_pair_type->setBody(point_color_struct_types);
+
+    // image_type = llvm::StructType::create(*context, "Image");
+    // image_type->setBody({
+    //     llvm::Type::getInt32Ty(*context),                          // width
+    //     llvm::Type::getInt32Ty(*context),                          // height
+    //     llvm::Type::getInt32Ty(*context),                          // channels
+    //     llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0) // data (uint8_t*)
+    // });
 
     // llvm::FunctionType* func_type = llvm::FunctionType::get(image_type, false);
     // llvm::Function* dummy_func = llvm::Function::Create(
@@ -743,31 +751,83 @@ void ir_type_def()
 
 Value* extern_funtion_gen()
 {
-    // image_grayscale_avg
-    FunctionType* func_type = FunctionType::get(
-        llvm::Type::getVoidTy(*context), llvm::PointerType::get(image_wrapper_type, 0), false);
-    Function* func =
-        Function::Create(func_type, Function::ExternalLinkage, "image_grayscale_avg", module.get());
-    for (auto& arg : func->args())
-        arg.setName("img");
+    FunctionType* func_type;
+    Function* func;
+    llvm::Argument* arg_iter;
 
-    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
-                                  llvm::PointerType::get(image_wrapper_type, 0), false);
+    // ColorWrapper* color_create_default();
+    func_type = FunctionType::get(llvm::PointerType::get(color_wrapper_type, 0), {}, false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "color_create_default",
+                            module.get());
+
+    // ColorWrapper* color_create_rgb(double r, double g, double b)
+    func_type =
+        FunctionType::get(llvm::PointerType::get(color_wrapper_type, 0),
+                          {llvm::Type::getDoubleTy(*context), llvm::Type::getDoubleTy(*context),
+                           llvm::Type::getDoubleTy(*context)},
+                          false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "color_create_rgb", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("r");
+    (arg_iter++)->setName("g");
+    (arg_iter++)->setName("b");
+
+    // ColorWrapper* color_create_rgba(double r, double g, double b, double a)
+    func_type =
+        FunctionType::get(llvm::PointerType::get(color_wrapper_type, 0),
+                          {llvm::Type::getDoubleTy(*context), llvm::Type::getDoubleTy(*context),
+                           llvm::Type::getDoubleTy(*context), llvm::Type::getDoubleTy(*context)},
+                          false);
     func =
-        Function::Create(func_type, Function::ExternalLinkage, "image_grayscale_lum", module.get());
-    for (auto& arg : func->args())
-        arg.setName("img");
+        Function::Create(func_type, Function::ExternalLinkage, "color_create_rgba", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("r");
+    (arg_iter++)->setName("g");
+    (arg_iter++)->setName("b");
+    (arg_iter++)->setName("a");
 
-    // image_create_from_file
+    // void color_destroy(ColorWrapper* color)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  llvm::PointerType::get(color_wrapper_type, 0), false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "color_destroy", module.get());
+    func->arg_begin()->setName("color");
+
+    // ImageWrapper* image_create_w_h_channels(int w, int h, int channels)
+    func_type =
+        FunctionType::get(llvm::PointerType::get(image_wrapper_type, 0),
+                          {llvm::Type::getInt32Ty(*context), llvm::Type::getInt32Ty(*context),
+                           llvm::Type::getInt32Ty(*context)},
+                          false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_create_w_h_channels",
+                            module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("w");
+    (arg_iter++)->setName("h");
+    (arg_iter++)->setName("channels");
+
+    // ImageWrapper* image_create_w_h_channels_fill(int w, int h, int channels, ColorWrapper* fill)
+    func_type = FunctionType::get(
+        llvm::PointerType::get(image_wrapper_type, 0),
+        {llvm::Type::getInt32Ty(*context), llvm::Type::getInt32Ty(*context),
+         llvm::Type::getInt32Ty(*context), llvm::PointerType::get(color_wrapper_type, 0)},
+        false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_create_w_h_channels_fill",
+                            module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("w");
+    (arg_iter++)->setName("h");
+    (arg_iter++)->setName("channels");
+    (arg_iter++)->setName("fill");
+
+    // ImageWrapper* image_create_filename(const char* filename)
     func_type =
         FunctionType::get(llvm::PointerType::get(image_wrapper_type, 0),
                           {llvm::PointerType::get(llvm::Type::getInt8Ty(*context), 0)}, false);
     func = Function::Create(func_type, Function::ExternalLinkage, "image_create_from_file",
                             module.get());
-    for (auto& arg : func->args())
-        arg.setName("filename");
+    func->arg_begin()->setName("filename");
 
-    // image_write
+    // bool image_write(ImageWrapper* img, const char* filename)
     func_type = FunctionType::get(llvm::Type::getInt1Ty(*context),
                                   {
                                       llvm::PointerType::get(image_wrapper_type, 0),
@@ -775,9 +835,185 @@ Value* extern_funtion_gen()
                                   },
                                   false);
     func = Function::Create(func_type, Function::ExternalLinkage, "image_write", module.get());
-    auto arg_iter = func->arg_begin();
-    arg_iter->setName("img");
-    (++arg_iter)->setName("filename");
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("filename");
+
+    // void image_destroy(ImageWrapper* img)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  llvm::PointerType::get(image_wrapper_type, 0), false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_destroy", module.get());
+    func->arg_begin()->setName("img");
+
+    // void image_grayscale_avg(ImageWrapper* img)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  llvm::PointerType::get(image_wrapper_type, 0), false);
+    func =
+        Function::Create(func_type, Function::ExternalLinkage, "image_grayscale_avg", module.get());
+    func->arg_begin()->setName("img");
+
+    // void image_grayscale_lum(ImageWrapper* img)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  llvm::PointerType::get(image_wrapper_type, 0), false);
+    func =
+        Function::Create(func_type, Function::ExternalLinkage, "image_grayscale_lum", module.get());
+    func->arg_begin()->setName("img");
+
+    // void image_crop(ImageWrapper* img, uint16_t cx, uint16_t cy, uint16_t cw, uint16_t ch)
+    func_type =
+        FunctionType::get(llvm::Type::getVoidTy(*context),
+                          {llvm::PointerType::get(image_wrapper_type, 0),
+                           llvm::Type::getInt16Ty(*context), llvm::Type::getInt16Ty(*context),
+                           llvm::Type::getInt16Ty(*context), llvm::Type::getInt16Ty(*context)},
+                          false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_crop", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("cx");
+    (arg_iter++)->setName("cy");
+    (arg_iter++)->setName("cw");
+    (arg_iter++)->setName("ch");
+
+    // void image_f_scale(ImageWrapper* img, uint32_t new_w, uint32_t new_h, bool linked,
+    //      TwoDimInterpC method)
+    func_type =
+        FunctionType::get(llvm::Type::getVoidTy(*context),
+                          {llvm::PointerType::get(image_wrapper_type, 0),
+                           llvm::Type::getInt32Ty(*context), llvm::Type::getInt32Ty(*context),
+                           llvm::Type::getInt1Ty(*context), llvm::Type::getInt32Ty(*context)},
+                          false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_f_scale", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("new_w");
+    (arg_iter++)->setName("new_h");
+    (arg_iter++)->setName("linked");
+    (arg_iter++)->setName("method");
+
+    // ImageWrapper* image_histogram(ImageWrapper* img, bool inc_lum)
+    func_type = FunctionType::get(
+        llvm::PointerType::get(image_wrapper_type, 0),
+        {llvm::PointerType::get(image_wrapper_type, 0), llvm::Type::getInt1Ty(*context)}, false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_histogram", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("inc_lum");
+
+    // void image_color_ramp(ImageWrapper* img, PointColorPair* points, size_t points_count,
+    //      OneDimInterpC method)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(point_color_pair_type, 0),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::Type::getInt32Ty(*context),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_color_ramp", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("points");
+    (arg_iter++)->setName("points_count");
+    (arg_iter++)->setName("method");
+
+    // ImageWrapper* image_preview_color_ramp(ImageWrapper* img, PointColorPair* points,
+    //      size_t points_count, OneDimInterpC method)
+    func_type = FunctionType::get(llvm::PointerType::get(image_wrapper_type, 0),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(point_color_pair_type, 0),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::Type::getInt32Ty(*context),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_color_ramp", module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("points");
+    (arg_iter++)->setName("points_count");
+    (arg_iter++)->setName("method");
+
+    // void image_alpha_overlay_img_img(ImageWrapper* img, ImageWrapper* fac, int fac_x, int fac_y,
+    //      ImageWrapper* other, int other_x, int other_y)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::Type::getInt32Ty(*context),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_alpha_overlay_img_img",
+                            module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("fac");
+    (arg_iter++)->setName("fac_x");
+    (arg_iter++)->setName("fac_y");
+    (arg_iter++)->setName("other");
+    (arg_iter++)->setName("other_x");
+    (arg_iter++)->setName("other_y");
+
+    // void image_alpha_overlay_color_img(ImageWrapper* img, ColorWrapper* color, ImageWrapper*
+    // other,
+    //      int other_x, int other_y)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(color_wrapper_type, 0),
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::Type::getInt32Ty(*context),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_alpha_overlay_color_img",
+                            module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("color");
+    (arg_iter++)->setName("other");
+    (arg_iter++)->setName("other_x");
+    (arg_iter++)->setName("other_y");
+
+    // void image_alpha_overlay_color_color(ImageWrapper* img, ColorWrapper* color, ColorWrapper*
+    // other)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(color_wrapper_type, 0),
+                                      llvm::PointerType::get(color_wrapper_type, 0),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_alpha_overlay_color_color",
+                            module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("color");
+    (arg_iter++)->setName("other");
+
+    // void image_alpha_overlay_img_color(ImageWrapper* img, ImageWrapper* fac, int fac_x, int
+    // fac_y,
+    //      ColorWrapper* other)
+    func_type = FunctionType::get(llvm::Type::getVoidTy(*context),
+                                  {
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::PointerType::get(image_wrapper_type, 0),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::Type::getInt32Ty(*context),
+                                      llvm::PointerType::get(color_wrapper_type, 0),
+                                  },
+                                  false);
+    func = Function::Create(func_type, Function::ExternalLinkage, "image_alpha_overlay_img_color",
+                            module.get());
+    arg_iter = func->arg_begin();
+    (arg_iter++)->setName("img");
+    (arg_iter++)->setName("fac");
+    (arg_iter++)->setName("fac_x");
+    (arg_iter++)->setName("fac_y");
+    (arg_iter++)->setName("other");
 
     // // Look up the name in the global module table.
     // Function* callee_f = module->getFunction("image_create_from_file");

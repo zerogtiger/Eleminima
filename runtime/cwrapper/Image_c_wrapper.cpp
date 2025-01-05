@@ -102,12 +102,6 @@ ImageWrapper* image_create_filename(const char* filename)
     return new ImageWrapper{new Image(filename)};
 }
 
-// Method Wrappers
-bool image_read(ImageWrapper* img, const char* filename)
-{
-    return reinterpret_cast<Image*>(img->instance)->read(filename);
-}
-
 bool image_write(ImageWrapper* img, const char* filename)
 {
     return reinterpret_cast<Image*>(img->instance)->write(filename);

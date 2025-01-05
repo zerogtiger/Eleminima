@@ -13,24 +13,24 @@ output_avg = io::output
     dest: "/Users/tigerding/Projects/eleminima/demo_avg.jpeg",
 }
 
-output_lum = io::output 
-{
-    dest: "/Users/tigerding/Projects/eleminima/demo_lum.jpeg",
-}
-
+// output_lum = io::output 
+// {
+//     dest: "/Users/tigerding/Projects/eleminima/demo_lum.jpeg",
+// }
+// 
 input image -> g_avg image
 g_avg image -> output_avg image
-
-g_lum = color::grayscale{}
-
-input image -> g_lum image
-g_lum image -> output_lum image
-
-output_hist = io::output 
-{
-    dest: "/Users/tigerding/Projects/eleminima/demo_hist.jpeg",
-}
-
-hist = stats::histogram {}
-input image -> hist image
-hist image -> output_hist image
+// 
+// g_lum = color::grayscale{}
+// 
+// input image -> g_lum image
+// g_lum image -> output_lum image
+// 
+// output_hist = io::output 
+// {
+//     dest: "/Users/tigerding/Projects/eleminima/demo_hist.jpeg",
+// }
+// 
+// hist = stats::histogram {}
+// input image -> hist image
+// hist image -> output_hist image

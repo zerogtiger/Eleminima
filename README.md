@@ -1,6 +1,6 @@
 # Eleminima: declarative graphics compositing language
 
-Pre-alpha release in progress.
+Pre-alpha release in progress. Priorities are basic functionalities and not clean code.
 
 For supported nodes in this version, see [docs.md](docs.md)
 
