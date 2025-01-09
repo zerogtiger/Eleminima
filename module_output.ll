@@ -26,7 +26,7 @@ declare void @image_grayscale_avg(ptr)
 
 declare void @image_grayscale_lum(ptr)
 
-declare void @image_crop(ptr, i16, i16, i16, i16)
+declare void @image_crop(ptr, double, double, double, double)
 
 declare void @image_f_scale(ptr, i32, i32, i1, i32)
 
@@ -47,7 +47,7 @@ declare void @image_alpha_overlay_img_color(ptr, ptr, i32, i32, ptr)
 define void @main() {
 entry:
   %0 = call ptr @image_create_from_file(ptr @str)
-  call void @image_grayscale_avg(<null operand!>)
-  %1 = call i1 @image_write(<null operand!>, ptr @str.2)
+  call void @image_grayscale_avg(ptr %0)
+  %1 = call i1 @image_write(ptr %0, ptr @str.2)
   ret void
 }

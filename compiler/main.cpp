@@ -273,7 +273,7 @@ class edge_expr_ast : public expr_ast {
     Value* code_gen() override;
 };
 
-class node_expr_ast : public expr_ast {
+class node_expr_ast {
     Category cat;
     NodeName name;
     std::map<std::string, std::unique_ptr<expr_ast>> fields;
@@ -286,7 +286,7 @@ class node_expr_ast : public expr_ast {
     {
     }
 
-    Value* code_gen() override;
+    std::map<std::string, Value*> code_gen();
     Category get_cat() { return cat; }
     NodeName get_name() { return name; }
 
@@ -501,49 +501,56 @@ static NodeName get_node_name(std::string nn)
 }
 
 // definition : '=' type '{' { field_assignment } '}' ';' ;
-static std::unique_ptr<expr_ast> parse_defn_expr()
+static std::unique_ptr<node_expr_ast> parse_defn_expr()
 {
     get_next_tok(); // eat '='
 
     if (cur_tok != tok_id) {
-        return LogError("Expected category in node definition");
+        LogError("Expected category in node definition");
+        return nullptr;
     }
 
     std::string cat = id_name;
     get_next_tok(); // eat id
     if (!is_valid_category(cat)) {
-        return LogError("Expected valid category name, got \"" + cat + "\"");
+        LogError("Expected valid category name, got \"" + cat + "\"");
+        return nullptr;
     }
 
     if (cur_tok != tok_scope_res_op) {
-        return LogError("Expected \"::\"");
+        LogError("Expected \"::\"");
+        return nullptr;
     }
     get_next_tok(); // eat "::"
     if (cur_tok != Token::tok_id) {
-        return LogError("Expected node name");
+        LogError("Expected node name");
+        return nullptr;
     }
     std::string node_name = id_name;
     get_next_tok(); // eat node name
     if (!is_valid_node_name_given_cat(cat, node_name)) {
-        return LogError("Expected valid node name under \"" + cat + "\", got \"" + node_name +
-                        "\"");
+        LogError("Expected valid node name under \"" + cat + "\", got \"" + node_name + "\"");
+        return nullptr;
     }
 
     if (cur_tok != '{') {
-        return LogError("Expected { in node declaration");
+        LogError("Expected { in node declaration");
+        return nullptr;
     }
     get_next_tok(); // eat {
 
     std::map<std::string, std::unique_ptr<expr_ast>> fields;
     while (cur_tok != '}') {
         if (cur_tok != tok_id) {
-            return LogError("Expected field name in node declaration");
+            LogError("Expected field name in node declaration");
+            return nullptr;
         }
         std::string field_name = id_name;
         get_next_tok(); // eat id name
 
         if (cur_tok != ':') {
-            return LogError("Expected ':' for field assignment");
+            LogError("Expected ':' for field assignment");
+            return nullptr;
         }
         get_next_tok(); // eat :
 
@@ -863,8 +870,8 @@ Value* extern_funtion_gen()
     func_type =
         FunctionType::get(llvm::Type::getVoidTy(*context),
                           {llvm::PointerType::get(image_wrapper_type, 0),
-                           llvm::Type::getInt16Ty(*context), llvm::Type::getInt16Ty(*context),
-                           llvm::Type::getInt16Ty(*context), llvm::Type::getInt16Ty(*context)},
+                           llvm::Type::getDoubleTy(*context), llvm::Type::getDoubleTy(*context),
+                           llvm::Type::getDoubleTy(*context), llvm::Type::getDoubleTy(*context)},
                           false);
     func = Function::Create(func_type, Function::ExternalLinkage, "image_crop", module.get());
     arg_iter = func->arg_begin();
@@ -1101,7 +1108,7 @@ Value* field_assgn_ast::code_gen() { return nullptr; }
 
 Value* edge_expr_ast::code_gen() { return nullptr; }
 
-Value* node_expr_ast::code_gen()
+std::map<std::string, Value*> node_expr_ast::code_gen()
 {
     if (cat == io && name == image) {
 
@@ -1114,13 +1121,17 @@ Value* node_expr_ast::code_gen()
 
         Function* callee_f = module->getFunction("image_create_from_file");
 
-        if (!callee_f)
-            return log_error_v("Unknown function referenced");
+        if (!callee_f) {
+            log_error_v("Unknown function referenced");
+            return {};
+        }
 
-        if (callee_f->arg_size() != args_v.size())
-            return log_error_v("Incorrect # arguments passed");
+        if (callee_f->arg_size() != args_v.size()) {
+            log_error_v("Incorrect # arguments passed");
+            return {};
+        }
 
-        return ir_builder->CreateCall(callee_f, args_v);
+        return {{"image", ir_builder->CreateCall(callee_f, args_v)}};
     }
     else if (cat == io && name == output) {
 
@@ -1134,13 +1145,18 @@ Value* node_expr_ast::code_gen()
 
         Function* callee_f = module->getFunction("image_write");
 
-        if (!callee_f)
-            return log_error_v("Unknown function referenced");
+        if (!callee_f) {
+            log_error_v("Unknown function referenced");
+            return {};
+        }
 
-        if (callee_f->arg_size() != args_v.size())
-            return log_error_v("Incorrect # arguments passed");
+        if (callee_f->arg_size() != args_v.size()) {
+            log_error_v("Incorrect # arguments passed");
+            return {};
+        }
 
-        return ir_builder->CreateCall(callee_f, args_v);
+        ir_builder->CreateCall(callee_f, args_v);
+        return {};
     }
     else if (cat == color && name == grayscale) {
 
@@ -1155,14 +1171,19 @@ Value* node_expr_ast::code_gen()
         }
         args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
 
-        if (!callee_f)
-            return log_error_v("Unknown function referenced");
+        if (!callee_f) {
+            log_error_v("Unknown function referenced");
+            return {};
+        }
 
-        if (callee_f->arg_size() != args_v.size())
-            return log_error_v("Incorrect # arguments passed");
+        if (callee_f->arg_size() != args_v.size()) {
+            log_error_v("Incorrect # arguments passed");
+            return {};
+        }
 
         ir_builder->CreateCall(callee_f, args_v);
-        return named_values[in_edges["image"].get_name()][in_edges["image"].get_field()];
+        return {
+            {"image", named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]}};
     }
     else if (cat == stats && name == histogram) {
 
@@ -1178,16 +1199,121 @@ Value* node_expr_ast::code_gen()
             args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 1));
         }
 
-        if (!callee_f)
-            return log_error_v("Unknown function referenced");
+        if (!callee_f) {
+            log_error_v("Unknown function referenced");
+            return {};
+        }
 
-        // if (callee_f->arg_size() != args_v.size())
-        //     return log_error_v("Incorrect # arguments passed");
+        if (callee_f->arg_size() != args_v.size()) {
+            log_error_v("Incorrect # arguments passed");
+            return {};
+        }
 
-        return ir_builder->CreateCall(callee_f, args_v);
+        return {{"preview", ir_builder->CreateCall(callee_f, args_v)}};
     }
+    else if (cat == spacial && name == crop) {
 
-    return nullptr;
+        std::vector<Value*> args_v;
+        Function* callee_f = module->getFunction("image_crop");
+
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
+        if (fields.count("start_x")) {
+            args_v.push_back(fields["start_x"]->code_gen());
+        }
+        else {
+            log_error_v("Error: expected start_x in crop node declaration.");
+            return {};
+        }
+
+        if (fields.count("start_y")) {
+            args_v.push_back(fields["start_y"]->code_gen());
+        }
+        else {
+            log_error_v("Error: expected start_y in crop node declaration.");
+            return {};
+        }
+
+        if (fields.count("width")) {
+            args_v.push_back(fields["width"]->code_gen());
+        }
+        else {
+            log_error_v("Error: expected width in crop node declaration.");
+            return {};
+        }
+
+        if (fields.count("height")) {
+            args_v.push_back(fields["height"]->code_gen());
+        }
+        else {
+            log_error_v("Error: expected height in crop node declaration.");
+            return {};
+        }
+
+        if (!callee_f) {
+            log_error_v("Unknown function referenced");
+            return {};
+        }
+
+        if (callee_f->arg_size() != args_v.size()) {
+            log_error_v("Incorrect # arguments passed");
+            return {};
+        }
+
+        return {
+            {"image", named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]}};
+    }
+    // else if (cat == spacial && name == scale) {
+    //
+    //     std::vector<Value*> args_v;
+    //     Function* callee_f = module->getFunction("image_crop");
+    //
+    //     args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
+    //     if (fields.count("start_x")) {
+    //         args_v.push_back(fields["start_x"]->code_gen());
+    //     }
+    //     else {
+    //         log_error_v("Error: expected start_x in crop node declaration.");
+    //         return {};
+    //     }
+    //
+    //     if (fields.count("start_y")) {
+    //         args_v.push_back(fields["start_y"]->code_gen());
+    //     }
+    //     else {
+    //         log_error_v("Error: expected start_y in crop node declaration.");
+    //         return {};
+    //     }
+    //
+    //     if (fields.count("width")) {
+    //         args_v.push_back(fields["width"]->code_gen());
+    //     }
+    //     else {
+    //         log_error_v("Error: expected width in crop node declaration.");
+    //         return {};
+    //     }
+    //
+    //     if (fields.count("height")) {
+    //         args_v.push_back(fields["height"]->code_gen());
+    //     }
+    //     else {
+    //         log_error_v("Error: expected height in crop node declaration.");
+    //         return {};
+    //     }
+    //
+    //     if (!callee_f) {
+    //         log_error_v("Unknown function referenced");
+    //         return {};
+    //     }
+    //
+    //     if (callee_f->arg_size() != args_v.size()) {
+    //         log_error_v("Incorrect # arguments passed");
+    //         return {};
+    //     }
+    //
+    //     return {{"image", ir_builder->CreateCall(callee_f, args_v)}};
+    // }
+
+    return {};
 }
 
 void code_gen()
@@ -1213,7 +1339,7 @@ void code_gen()
             auto curr = st.back();
             if (visited[curr.first]) {
                 st.pop_back();
-                named_values[curr.first][curr.second] = ::nodes[curr.first]->code_gen();
+                named_values[curr.first] = ::nodes[curr.first]->code_gen();
             }
             else {
                 visited[curr.first] = true;

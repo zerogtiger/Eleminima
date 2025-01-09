@@ -1,4 +1,6 @@
 #include "../src/Image.h"
+#include <cstdint>
+#include <iostream>
 
 extern "C" {
 
@@ -102,9 +104,11 @@ ImageWrapper* image_create_filename(const char* filename)
     return new ImageWrapper{new Image(filename)};
 }
 
-bool image_write(ImageWrapper* img, const char* filename)
+void image_write(ImageWrapper* img, const char* filename)
 {
-    return reinterpret_cast<Image*>(img->instance)->write(filename);
+    if (!reinterpret_cast<Image*>(img->instance)->write(filename)) {
+        std::cout << "Failed to write image to filename \"" << filename << "\", unsupported format";
+    }
 }
 
 // Destructor Wrapper
@@ -130,9 +134,10 @@ void image_grayscale_lum(ImageWrapper* img)
     reinterpret_cast<Image*>(img->instance)->grayscale_lum();
 }
 
-void image_crop(ImageWrapper* img, uint16_t cx, uint16_t cy, uint16_t cw, uint16_t ch)
+void image_crop(ImageWrapper* img, double cx, double cy, double cw, double ch)
 {
-    reinterpret_cast<Image*>(img->instance)->crop(cx, cy, cw, ch);
+    reinterpret_cast<Image*>(img->instance)
+        ->crop((uint16_t) cx, (uint16_t) cy, (uint16_t) cw, (uint16_t) ch);
 }
 
 void image_f_scale(ImageWrapper* img, uint32_t new_w, uint32_t new_h, bool linked,
