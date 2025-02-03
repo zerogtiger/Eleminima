@@ -4,6 +4,39 @@ Pre-alpha release in progress. Priorities are basic functionalities and not clea
 
 For supported nodes in this version, see [docs.md](docs.md)
 
+Error handling is very limited.
+
+### Pre-alpha release checklist
+
+- [ ] Color spec methods
+- [x] `io::image`
+- [x] `io::output`
+- [x] `spacial::crop`
+- [x] `spacial::scale`
+- [x] `stats::histogram`
+- [x] `color::color_ramp`
+- [ ] `color::mix`
+- [x] `color::grayscale`
+
+### Alpha release checklist
+- [ ] Error handling
+- [ ] Graph preview
+- [ ] Additional node support (to be decided)
+
+## Major project checklist
+
+Roughly prioritized
+- [ ] Pre-alpha release
+- [ ] Reorganize compiler files
+- [ ] Sample Eleminima code
+- [ ] Clean up this file
+- [ ] Alpha release
+- [ ] Node graph preview image
+- [ ] Release GH actions CD pipeline
+- [ ] JIT
+- [ ] Video demo/tutorial
+- [ ] Homebrew release
+
 ## EBNF Grammar definition
 
 ```EBNF
@@ -77,110 +110,6 @@ list
     ;
 
 ```
-<!-- --- -->
-<!---->
-<!-- statement = expr -->
-<!--    : 'if' paren_expr statement -->
-<!--    | 'if' paren_expr statement 'else' statement -->
-<!--    | 'while' paren_expr statement -->
-<!--    | 'do' statement 'while' paren_expr ';' -->
-<!--    | '{' statement* '}' -->
-<!--    | expr ';' -->
-<!--    | ';' -->
-<!--    ; -->
-<!---->
-<!-- paren_expr -->
-<!--    : '(' expr ')' -->
-<!--    ; -->
-<!---->
-<!-- expr -->
-<!--    : test -->
-<!--    | id '=' expr -->
-<!--    ; -->
-<!---->
-<!-- test -->
-<!--    : sum -->
-<!--    | sum '<' sum -->
-<!--    ; -->
-<!---->
-<!-- sum -->
-<!--    : term -->
-<!--    | sum '+' term -->
-<!--    | sum '-' term -->
-<!--    ; -->
-<!---->
-<!-- term -->
-<!--    : id -->
-<!--    | integer -->
-<!--    | paren_expr -->
-<!--    ; -->
-<!---->
-<!-- id -->
-<!--    : STRING -->
-<!--    ; -->
-<!---->
-<!-- integer -->
-<!--    : INT -->
-<!--    ; -->
-<!---->
-<!-- STRING -->
-<!--    : [A-Za-z]+ -->
-<!--    ; -->
-<!---->
-<!-- INT -->
-<!--    : [0-9]+ -->
-<!--    ; -->
-<!---->
-<!-- WS -->
-<!--    : [ rnt] -> skip -->
-<!--    ; -->
-<!---->
-<!-- letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" -->
-<!--        | "H" | "I" | "J" | "K" | "L" | "M" | "N" -->
-<!--        | "O" | "P" | "Q" | "R" | "S" | "T" | "U" -->
-<!--        | "V" | "W" | "X" | "Y" | "Z" | "a" | "b" -->
-<!--        | "c" | "d" | "e" | "f" | "g" | "h" | "i" -->
-<!--        | "j" | "k" | "l" | "m" | "n" | "o" | "p" -->
-<!--        | "q" | "r" | "s" | "t" | "u" | "v" | "w" -->
-<!--        | "x" | "y" | "z" ; -->
-<!---->
-<!-- digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ; -->
-<!---->
-<!-- symbol = "[" | "]" | "{" | "}" | "(" | ")" | "<" | ">" -->
-<!--        | "'" | '"' | "=" | "|" | "." | "," | ";" | "-"  -->
-<!--        | "+" | "*" | "?" | "\n" | "\t" | "\r" | "\f" | "\b" ; -->
-<!---->
-<!-- character = letter | digit | symbol | "_" | " " ; -->
-<!-- identifier = letter , { letter | digit | "_" } ; -->
-<!---->
-<!-- S = { " " | "\n" | "\t" | "\r" | "\f" | "\b" } ; -->
-<!---->
-<!-- terminal = "'" , character - "'" , { character - "'" } , "'" -->
-<!--          | '"' , character - '"' , { character - '"' } , '"' ; -->
-<!---->
-<!-- terminator = ";" | "." ; -->
-<!---->
-<!-- term = "(" , S , rhs , S , ")" -->
-<!--      | "[" , S , rhs , S , "]" -->
-<!--      | "{" , S , rhs , S , "}" -->
-<!--      | terminal -->
-<!--      | identifier ; -->
-<!---->
-<!-- factor = term , S , "?" -->
-<!--        | term , S , "*" -->
-<!--        | term , S , "+" -->
-<!--        | term , S , "-" , S , term -->
-<!--        | term , S ; -->
-<!---->
-<!-- concatenation = ( S , factor , S , "," ? ) + ; -->
-<!-- alternation = ( S , concatenation , S , "|" ? ) + ; -->
-<!---->
-<!-- rhs = alternation ; -->
-<!-- lhs = identifier ; -->
-<!---->
-<!-- rule = lhs , S , "=" , S , rhs , S , terminator ; -->
-<!---->
-<!-- grammar = ( S , rule , S ) * ; -->
 
 ### Node
 A `node` is the data type used in this language and can be one of many possible subtypes. 

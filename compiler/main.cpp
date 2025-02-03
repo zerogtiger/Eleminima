@@ -232,8 +232,8 @@ class list_expr_ast : public expr_ast {
 
   public:
     list_expr_ast(std::vector<std::unique_ptr<expr_ast>> content) : content(std::move(content)) {}
-
     Value* code_gen() override;
+    std::vector<std::unique_ptr<expr_ast>>& get_content() { return content; };
 };
 
 class field_assgn_ast : public expr_ast {
@@ -1221,7 +1221,7 @@ std::map<std::string, Value*> node_expr_ast::code_gen()
             args_v.push_back(fields["start_x"]->code_gen());
         }
         else {
-            log_error_v("Error: expected start_x in crop node declaration.");
+            log_error_v("Expected start_x in crop node declaration.");
             return {};
         }
 
@@ -1229,7 +1229,7 @@ std::map<std::string, Value*> node_expr_ast::code_gen()
             args_v.push_back(fields["start_y"]->code_gen());
         }
         else {
-            log_error_v("Error: expected start_y in crop node declaration.");
+            log_error_v("Expected start_y in crop node declaration.");
             return {};
         }
 
@@ -1237,7 +1237,7 @@ std::map<std::string, Value*> node_expr_ast::code_gen()
             args_v.push_back(fields["width"]->code_gen());
         }
         else {
-            log_error_v("Error: expected width in crop node declaration.");
+            log_error_v("Expected width in crop node declaration.");
             return {};
         }
 
@@ -1245,7 +1245,7 @@ std::map<std::string, Value*> node_expr_ast::code_gen()
             args_v.push_back(fields["height"]->code_gen());
         }
         else {
-            log_error_v("Error: expected height in crop node declaration.");
+            log_error_v("Expected height in crop node declaration.");
             return {};
         }
 
@@ -1262,56 +1262,325 @@ std::map<std::string, Value*> node_expr_ast::code_gen()
         return {
             {"image", named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]}};
     }
-    // else if (cat == spacial && name == scale) {
-    //
-    //     std::vector<Value*> args_v;
-    //     Function* callee_f = module->getFunction("image_crop");
-    //
-    //     args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
-    //     if (fields.count("start_x")) {
-    //         args_v.push_back(fields["start_x"]->code_gen());
-    //     }
-    //     else {
-    //         log_error_v("Error: expected start_x in crop node declaration.");
-    //         return {};
-    //     }
-    //
-    //     if (fields.count("start_y")) {
-    //         args_v.push_back(fields["start_y"]->code_gen());
-    //     }
-    //     else {
-    //         log_error_v("Error: expected start_y in crop node declaration.");
-    //         return {};
-    //     }
-    //
-    //     if (fields.count("width")) {
-    //         args_v.push_back(fields["width"]->code_gen());
-    //     }
-    //     else {
-    //         log_error_v("Error: expected width in crop node declaration.");
-    //         return {};
-    //     }
-    //
-    //     if (fields.count("height")) {
-    //         args_v.push_back(fields["height"]->code_gen());
-    //     }
-    //     else {
-    //         log_error_v("Error: expected height in crop node declaration.");
-    //         return {};
-    //     }
-    //
-    //     if (!callee_f) {
-    //         log_error_v("Unknown function referenced");
-    //         return {};
-    //     }
-    //
-    //     if (callee_f->arg_size() != args_v.size()) {
-    //         log_error_v("Incorrect # arguments passed");
-    //         return {};
-    //     }
-    //
-    //     return {{"image", ir_builder->CreateCall(callee_f, args_v)}};
-    // }
+    else if (cat == spacial && name == scale) {
+
+        std::vector<Value*> args_v;
+        Function* callee_f = module->getFunction("image_scale");
+
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
+
+        if (fields.count("width")) {
+            args_v.push_back(fields["width"]->code_gen());
+        }
+        else {
+            log_error_v("Expected width in scale node declaration.");
+            return {};
+        }
+
+        if (fields.count("height")) {
+            args_v.push_back(fields["height"]->code_gen());
+        }
+        else {
+            log_error_v("Expected height in scale node declaration.");
+            return {};
+        }
+
+        if (fields.count("linked")) {
+            if (static_cast<number_expr_ast*>(fields["linked"].get())->get_val() == 0) {
+                args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 0));
+            }
+            else {
+                args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 1));
+            }
+            args_v.push_back(fields["start_x"]->code_gen());
+        }
+        else {
+            log_error_v("Expected linked in scale node declaration.");
+            return {};
+        }
+
+        if (fields.count("method")) {
+            auto method = static_cast<string_expr_ast*>(fields["method"].get())->get_str();
+            if (method == "nearest") {
+                args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 101));
+            }
+            else if (method == "bilinear") {
+                args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 102));
+            }
+        }
+        else {
+            log_error_v("Expected method in scale node declaration.");
+            return {};
+        }
+
+        if (!callee_f) {
+            log_error_v("Unknown function referenced");
+            return {};
+        }
+
+        if (callee_f->arg_size() != args_v.size()) {
+            log_error_v("Incorrect # arguments passed");
+            return {};
+        }
+
+        return {{"image", ir_builder->CreateCall(callee_f, args_v)}};
+    }
+    else if (cat == color && name == color_ramp) {
+
+        std::vector<Value*> args_v;
+        Function* callee_ramp = module->getFunction("image_color_ramp");
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
+
+        // Optimization: code gen only if its used
+        Function* callee_preview = module->getFunction("image_color_ramp");
+
+        if (!fields.count("control_points")) {
+            log_error_v("Expected control_points in scale node declaration.");
+            return {};
+        }
+        std::vector<std::unique_ptr<expr_ast>>& control_points =
+            static_cast<list_expr_ast*>(fields["control_points"].get())->get_content();
+
+        auto pc_array_ptr = ir_builder->CreateAlloca(
+            point_color_pair_type,
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), control_points.size()),
+            "point_color_array");
+
+        for (int i = 0; i < control_points.size(); ++i) {
+            // error checking to be added here
+            std::vector<std::unique_ptr<expr_ast>>& pc_pair =
+                static_cast<list_expr_ast*>(control_points[i].get())->get_content();
+
+            if (pc_pair.size() != 2) {
+                log_error_v("Expected control_points elements to have 2 elements");
+                return {};
+            }
+
+            auto element_ptr = ir_builder->CreateGEP(
+                point_color_pair_type, pc_array_ptr,
+                {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), i)});
+
+            // Set the value field
+            auto value_ptr = ir_builder->CreateStructGEP(point_color_pair_type, element_ptr, 0);
+            ir_builder->CreateStore(pc_pair[0]->code_gen(), value_ptr);
+
+            // Set the color field
+            auto color_ptr = ir_builder->CreateStructGEP(point_color_pair_type, element_ptr, 1);
+            ir_builder->CreateStore(pc_pair[1]->code_gen(), color_ptr);
+        }
+
+        args_v.push_back(
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), control_points.size()));
+
+        std::string& interp_method =
+            reinterpret_cast<string_expr_ast*>(fields["interp_method"].get())->get_str();
+
+        // default interp method
+        int one_dim_interp = 2;
+        if (interp_method == "constant") {
+            one_dim_interp = 1;
+        }
+        else if (interp_method == "linear") {
+            one_dim_interp = 2;
+        }
+        else if (interp_method == "bezier") {
+            one_dim_interp = 3;
+        }
+        else if (interp_method == "bspline") {
+            one_dim_interp = 4;
+        }
+        args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), one_dim_interp));
+
+        return {{"image", ir_builder->CreateCall(callee_ramp, args_v)},
+                {"preview", ir_builder->CreateCall(callee_preview, args_v)}};
+
+        // auto array_ptr = *ir_builder->CreateAlloca(
+        //     point_color_pair_type,
+        //     llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), num_elements),
+        //     "point_color_array");
+
+        // if (fields.count("width")) {
+        //     args_v.push_back(fields["width"]->code_gen());
+        // }
+        // else {
+        //     log_error_v("Error: expected width in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (fields.count("height")) {
+        //     args_v.push_back(fields["height"]->code_gen());
+        // }
+        // else {
+        //     log_error_v("Error: expected height in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (fields.count("linked")) {
+        //     if (static_cast<number_expr_ast*>(fields["linked"].get())->get_val() == 0) {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 0));
+        //     }
+        //     else {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 1));
+        //     }
+        //     args_v.push_back(fields["start_x"]->code_gen());
+        // }
+        // else {
+        //     log_error_v("Error: expected linked in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (fields.count("method")) {
+        //     auto method = static_cast<string_expr_ast*>(fields["method"].get())->get_str();
+        //     if (method == "nearest") {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 101));
+        //     }
+        //     else if (method == "bilinear") {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 102));
+        //     }
+        // }
+        // else {
+        //     log_error_v("Error: expected method in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (!callee_f) {
+        //     log_error_v("Unknown function referenced");
+        //     return {};
+        // }
+        //
+        // if (callee_f->arg_size() != args_v.size()) {
+        //     log_error_v("Incorrect # arguments passed");
+        //     return {};
+        // }
+    }
+    else if (cat == color && name == mix) {
+
+        std::vector<Value*> args_v;
+        Function* callee_ramp = module->getFunction("image_color_ramp");
+        args_v.push_back(named_values[in_edges["image"].get_name()][in_edges["image"].get_field()]);
+
+        // Optimization: code gen only if its used
+        Function* callee_preview = module->getFunction("image_color_ramp");
+
+        if (!fields.count("control_points")) {
+            log_error_v("Expected control_points in scale node declaration.");
+            return {};
+        }
+        std::vector<std::unique_ptr<expr_ast>>& control_points =
+            static_cast<list_expr_ast*>(fields["control_points"].get())->get_content();
+
+        auto pc_array_ptr = ir_builder->CreateAlloca(
+            point_color_pair_type,
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), control_points.size()),
+            "point_color_array");
+
+        for (int i = 0; i < control_points.size(); ++i) {
+            // error checking to be added here
+            std::vector<std::unique_ptr<expr_ast>>& pc_pair =
+                static_cast<list_expr_ast*>(control_points[i].get())->get_content();
+
+            if (pc_pair.size() != 2) {
+                log_error_v("Expected control_points elements to have 2 elements");
+                return {};
+            }
+
+            auto element_ptr = ir_builder->CreateGEP(
+                point_color_pair_type, pc_array_ptr,
+                {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), i)});
+
+            // Set the value field
+            auto value_ptr = ir_builder->CreateStructGEP(point_color_pair_type, element_ptr, 0);
+            ir_builder->CreateStore(pc_pair[0]->code_gen(), value_ptr);
+
+            // Set the color field
+            auto color_ptr = ir_builder->CreateStructGEP(point_color_pair_type, element_ptr, 1);
+            ir_builder->CreateStore(pc_pair[1]->code_gen(), color_ptr);
+        }
+
+        args_v.push_back(
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), control_points.size()));
+
+        std::string& interp_method =
+            reinterpret_cast<string_expr_ast*>(fields["interp_method"].get())->get_str();
+
+        // default interp method
+        int one_dim_interp = 2;
+        if (interp_method == "constant") {
+            one_dim_interp = 1;
+        }
+        else if (interp_method == "linear") {
+            one_dim_interp = 2;
+        }
+        else if (interp_method == "bezier") {
+            one_dim_interp = 3;
+        }
+        else if (interp_method == "bspline") {
+            one_dim_interp = 4;
+        }
+        args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), one_dim_interp));
+
+        return {{"image", ir_builder->CreateCall(callee_ramp, args_v)},
+                {"preview", ir_builder->CreateCall(callee_preview, args_v)}};
+
+        // auto array_ptr = *ir_builder->CreateAlloca(
+        //     point_color_pair_type,
+        //     llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), num_elements),
+        //     "point_color_array");
+
+        // if (fields.count("width")) {
+        //     args_v.push_back(fields["width"]->code_gen());
+        // }
+        // else {
+        //     log_error_v("Error: expected width in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (fields.count("height")) {
+        //     args_v.push_back(fields["height"]->code_gen());
+        // }
+        // else {
+        //     log_error_v("Error: expected height in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (fields.count("linked")) {
+        //     if (static_cast<number_expr_ast*>(fields["linked"].get())->get_val() == 0) {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 0));
+        //     }
+        //     else {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt1Ty(*context), 1));
+        //     }
+        //     args_v.push_back(fields["start_x"]->code_gen());
+        // }
+        // else {
+        //     log_error_v("Error: expected linked in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (fields.count("method")) {
+        //     auto method = static_cast<string_expr_ast*>(fields["method"].get())->get_str();
+        //     if (method == "nearest") {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 101));
+        //     }
+        //     else if (method == "bilinear") {
+        //         args_v.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), 102));
+        //     }
+        // }
+        // else {
+        //     log_error_v("Error: expected method in scale node declaration.");
+        //     return {};
+        // }
+        //
+        // if (!callee_f) {
+        //     log_error_v("Unknown function referenced");
+        //     return {};
+        // }
+        //
+        // if (callee_f->arg_size() != args_v.size()) {
+        //     log_error_v("Incorrect # arguments passed");
+        //     return {};
+        // }
+    }
 
     return {};
 }

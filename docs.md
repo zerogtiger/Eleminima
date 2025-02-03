@@ -79,8 +79,8 @@ color::color_ramp
 - `control_points`: list of elements in the form `[ number ∈ [0, 1], color ]`. 
 
 ```
-image_1 ->
-image_2 ->
+(image_1) ->
+(image_2) ->
 (factor ->)
 color::mix 
 {
@@ -107,8 +107,6 @@ color::grayscale
 -> image
 ```
 - `method`: `"lum"` or `"avg"`; optionally specify whether to use luminosity or average sampling method, defaults to luminosity
-
-
 
 
 <!-- ``` -->
